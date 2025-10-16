@@ -2,24 +2,23 @@
 
 import { useEffect, useState } from "react";
 import AuthForm from "@/components/AuthForm";
-import { loginUser } from "@/lib/api";
-import { setToken } from "@/lib/token";
+import { signup } from "@/lib/auth";
 import { useAuthStore } from "@/store/authStore";
 import { useRouter } from "next/navigation";
 
-export default function LoginPage() {
+export default function SignupPage() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
   const fetchUser = useAuthStore((s) => s.fetchUser);
 
-  const [mounted, setMounted] = useState(false); // 👈 추가
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // ✅ hydration-safe guard
+  // ✅ 로그인되어 있으면 이전 페이지 또는 홈으로 리디렉트
   useEffect(() => {
     if (!mounted) return;
     if (user) {
@@ -28,16 +27,20 @@ export default function LoginPage() {
     }
   }, [mounted, user, router]);
 
-  const handleLogin = async (email: string, password: string) => {
-    const data = await loginUser(email, password);
-    setToken(data.access_token);
-    await fetchUser();
-    setUser(data.user ?? null);
-    alert("로그인되었습니다!");
-    router.replace("/");
+  const handleSignup = async (email: string, password: string) => {
+    try {
+      await signup(email, password);
+      await fetchUser();
+      setUser(useAuthStore.getState().user);
+      alert("회원가입이 완료되었습니다!");
+      router.replace("/");
+    } catch (err: any) {
+      console.error(err);
+      alert("회원가입에 실패했습니다. 다시 시도해주세요.");
+    }
   };
 
-  // ✅ SSR에서는 아무것도 렌더하지 않음 (hydration mismatch 방지)
+  // ✅ SSR-safe: 서버 렌더링 시 아무것도 표시하지 않음
   if (!mounted) return null;
 
   if (user) {
@@ -48,5 +51,5 @@ export default function LoginPage() {
     );
   }
 
-  return <AuthForm type="login" onSubmit={handleLogin} />;
+  return <AuthForm type="signup" onSubmit={handleSignup} />;
 }
