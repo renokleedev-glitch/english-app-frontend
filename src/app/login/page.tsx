@@ -3,50 +3,24 @@
 import { useEffect, useState } from "react";
 import AuthForm from "@/components/AuthForm";
 import { loginUser } from "@/lib/api";
-import { setToken } from "@/lib/token";
+import { setToken, waitForTokenSync } from "@/lib/token";
 import { useAuthStore } from "@/store/authStore";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
-  const router = useRouter();
-  const user = useAuthStore((s) => s.user);
-  const setUser = useAuthStore((s) => s.setUser);
   const fetchUser = useAuthStore((s) => s.fetchUser);
-
-  const [mounted, setMounted] = useState(false); // 👈 추가
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  // ✅ hydration-safe guard
-  useEffect(() => {
-    if (!mounted) return;
-    if (user) {
-      if (window.history.length > 1) router.back();
-      else router.replace("/");
-    }
-  }, [mounted, user, router]);
 
   const handleLogin = async (email: string, password: string) => {
     const data = await loginUser(email, password);
     setToken(data.access_token);
+
+    // ✅ localStorage 반영 직후 살짝 대기
+    await waitForTokenSync();
+
     await fetchUser();
-    setUser(data.user ?? null);
-    alert("로그인되었습니다!");
-    router.replace("/");
+    alert("로그인 성공!");
+    window.location.href = "/";
   };
-
-  // ✅ SSR에서는 아무것도 렌더하지 않음 (hydration mismatch 방지)
-  if (!mounted) return null;
-
-  if (user) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center text-sm opacity-70">
-        이미 로그인되어 있어요. 이전 페이지로 이동합니다…
-      </div>
-    );
-  }
 
   return <AuthForm type="login" onSubmit={handleLogin} />;
 }
