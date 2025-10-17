@@ -22,7 +22,10 @@ export default function LoginPage() {
       await fetchUser();
 
       alert("로그인되었습니다!");
-      window.location.href = "/"; // 전체 새로고침
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 500);
+      // router.push("/");
     } catch (err) {
       alert("로그인 실패");
       console.error(err);
