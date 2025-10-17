@@ -15,6 +15,7 @@ export default function LoginPage() {
     setToken(data.access_token);
     await waitForTokenSync();
     await useAuthStore.getState().fetchUser(); // ✅ 바로 세션 복구
+    alert("로그인 되었습니다. ");
     window.location.href = "/"; // 새로고침으로 Navbar 반영
   };
   return <AuthForm type="login" onSubmit={handleLogin} />;
