@@ -1,25 +1,32 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import AuthForm from "@/components/AuthForm";
 import { loginUser } from "@/lib/api";
-import { setToken, waitForTokenSync } from "@/lib/token";
+import { setToken } from "@/lib/token";
 import { useAuthStore } from "@/store/authStore";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
+  const router = useRouter();
   const fetchUser = useAuthStore((s) => s.fetchUser);
 
   const handleLogin = async (email: string, password: string) => {
-    const data = await loginUser(email, password);
-    setToken(data.access_token);
+    try {
+      const data = await loginUser(email, password);
 
-    // ✅ localStorage 반영 직후 살짝 대기
-    await waitForTokenSync();
+      // ✅ 클라이언트에서만 실행 보장
+      if (typeof window !== "undefined") {
+        setToken(data.access_token);
+      }
 
-    await fetchUser();
-    alert("로그인 성공!");
-    window.location.href = "/";
+      await fetchUser();
+
+      alert("로그인되었습니다!");
+      window.location.href = "/"; // 전체 새로고침
+    } catch (err) {
+      alert("로그인 실패");
+      console.error(err);
+    }
   };
 
   return <AuthForm type="login" onSubmit={handleLogin} />;
