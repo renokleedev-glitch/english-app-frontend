@@ -7,6 +7,7 @@ import Navbar from "@/components/Navbar";
 import { useThemeStore } from "@/store/themeStore";
 import { useAuthStore } from "@/store/authStore";
 import { getToken } from "@/lib/token";
+import { Toaster } from "sonner";
 
 export default function RootLayout({
   children,

@@ -5,6 +5,7 @@ import { loginUser } from "@/lib/api";
 import { setToken, waitForTokenSync } from "@/lib/token";
 import { useAuthStore } from "@/store/authStore";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -16,7 +17,10 @@ export default function LoginPage() {
     await waitForTokenSync();
     await useAuthStore.getState().fetchUser(); // ✅ 바로 세션 복구
     alert("로그인 되었습니다. ");
-    window.location.href = "/"; // 새로고침으로 Navbar 반영
+    // toast.success("로그인 되었습니다."); // ⬅️ 이렇게 사용합니다.
+
+    // window.location.href = "/"; // 새로고침으로 Navbar 반영
+    router.push("/dashboard");
   };
   return <AuthForm type="login" onSubmit={handleLogin} />;
 }
