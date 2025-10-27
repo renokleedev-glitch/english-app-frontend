@@ -43,15 +43,12 @@ export interface DailyActivityLog {
   details?: any | null;
 }
 
-// --- ❓ [핵심 추가] 퀴즈 관련 타입 ---
-
-// 퀴즈 선택지 타입
+// --- 퀴즈 관련 타입 ---
 export interface QuizOption {
   id: number; // 선택지의 고유 ID (단어 ID 또는 임시 ID)
   text: string; // 선택지 텍스트 (뜻 또는 예문 해석)
 }
 
-// 객관식 퀴즈 문제 타입
 export interface MultipleChoiceQuiz {
   question_word: Word; // 발음할 단어 정보 (Word 타입 재사용)
   question_type: string; // 'meaning' 또는 'example'
@@ -59,4 +56,9 @@ export interface MultipleChoiceQuiz {
   correct_option_id: number; // 정답 선택지의 ID
 }
 
-// 필요에 따라 다른 타입 정의들을 이곳에 추가할 수 있습니다.
+// --- ✅ [핵심 추가] 오늘의 활동 완료 상태 타입 ---
+export interface TodayActivityStatus {
+  word_study: boolean; // 오늘의 단어 학습 완료 여부
+  word_quiz: boolean; // 단어 퀴즈 완료 여부
+  // grammar_quiz?: boolean; // 나중에 추가될 활동들
+}
