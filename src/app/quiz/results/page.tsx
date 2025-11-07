@@ -70,8 +70,13 @@ export default function QuizResultsPage() {
       toast.dismiss();
       toast.success("초기화 완료! 새로운 퀴즈를 시작합니다.");
 
+      // 🚨 [핵심 수정] router.replace 대신 window.location.href 사용
+      // 이 방법은 Next.js 캐싱을 무시하고 페이지를 완전히 새로 로드합니다.
+      window.location.href =
+        activityType === "word_quiz" ? "/quiz" : "/word-test";
+
       // 3. 퀴즈 페이지로 이동 (쿼리 파라미터 필요 없음)
-      router.replace(activityType === "word_quiz" ? "/quiz" : "/word-test");
+      // router.replace(activityType === "word_quiz" ? "/quiz" : "/word-test");
     } catch (e) {
       toast.dismiss();
       toast.error("초기화 실패. 잠시 후 다시 시도해주세요.");

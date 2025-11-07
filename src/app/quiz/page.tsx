@@ -2,7 +2,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-// useSearchParams 대신 useRouter만 사용합니다.
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -38,63 +37,58 @@ export default function QuizPage() {
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [isProcessingResults, setIsProcessingResults] = useState(false);
+
+  // 서버에서 확인한 오늘 완료 상태
   const [isAlreadyCompletedToday, setIsAlreadyCompletedToday] = useState<
     boolean | null
   >(null);
 
   const [quizAttempts, setQuizAttempts] = useState<QuizAttempt[]>([]);
 
-  // loadQuizData 함수는 shouldSkipCheck 인수를 받아 사용합니다.
-  const loadQuizData = useCallback(
-    async (shouldSkipCheck: boolean) => {
-      const currentUserId = user?.id;
+  // 🚀 [핵심 로직] loadQuizData 함수: 항상 서버 상태를 확인하고 퀴즈 로드를 시도합니다.
+  const loadQuizData = useCallback(async () => {
+    const currentUserId = user?.id;
 
-      if (!currentUserId) {
+    if (!currentUserId) {
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    setIsAlreadyCompletedToday(null); // 로딩 시작 시 상태 초기화
+
+    try {
+      // 1. 서버에 완료 상태 확인
+      const completed = await checkQuizCompletionStatus(QUIZ_ACTIVITY_TYPE);
+      setIsAlreadyCompletedToday(completed); // 🚨 서버 응답으로 상태 업데이트
+
+      // 2. 완료했으면 여기서 중단
+      if (completed) {
         setIsLoading(false);
         return;
       }
 
-      setIsLoading(true);
-      setError(null);
-      setIsAlreadyCompletedToday(null); // 로딩 시작 시 null로 초기화
+      // 3. 완료하지 않았으면 퀴즈 로드 시작
+      const quizResults = await getMultipleChoiceQuizSet();
 
-      try {
-        // 🚨 [핵심] shouldSkipCheck 인자를 사용하여 완료 상태 확인을 건너뜁니다.
-        if (!shouldSkipCheck) {
-          const completed = await checkQuizCompletionStatus(QUIZ_ACTIVITY_TYPE);
-          setIsAlreadyCompletedToday(completed);
-
-          if (completed) {
-            setIsLoading(false);
-            return;
-          }
-        } else {
-          // 재시도 모드: 서버 체크를 건너뛰고 진행 UI를 강제합니다.
-          setIsAlreadyCompletedToday(false);
-        }
-
-        // 퀴즈 로드 시작
-        const quizResults = await getMultipleChoiceQuizSet();
-
-        if (quizResults && quizResults.length > 0) {
-          setQuizzes(quizResults);
-          setCurrentQuestionIndex(0);
-          setQuizAttempts([]);
-        } else {
-          setError(
-            "퀴즈를 생성할 수 없습니다. 학습할 단어가 부족하거나 모두 마스터했습니다."
-          );
-          toast.info("퀴즈를 생성할 수 없습니다.");
-        }
-      } catch (err: any) {
-        setError(err.message || "퀴즈 로딩 중 오류 발생");
-        toast.error(err.message || "퀴즈 로딩 중 오류 발생");
-      } finally {
-        setIsLoading(false);
+      if (quizResults && quizResults.length > 0) {
+        setQuizzes(quizResults);
+        setCurrentQuestionIndex(0);
+        setQuizAttempts([]);
+      } else {
+        setError(
+          "퀴즈를 생성할 수 없습니다. 학습할 단어가 부족하거나 모두 마스터했습니다."
+        );
+        toast.info("퀴즈를 생성할 수 없습니다.");
       }
-    },
-    [user?.id]
-  );
+    } catch (err: any) {
+      setError(err.message || "퀴즈 로딩 중 오류 발생");
+      toast.error(err.message || "퀴즈 로딩 중 오류 발생");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user?.id]); // 🚨 user?.id만 의존
 
   // --- 데이터 로딩 및 완료 상태 확인 ---
   useEffect(() => {
@@ -105,28 +99,14 @@ export default function QuizPage() {
       router.push("/login");
     }
 
-    const currentUserId = user?.id;
-
-    // 🚨 [최종 수정] window.location.search에서 'key' 파라미터 유무로 재시도 여부를 판단합니다.
-    let shouldSkipCheck = false;
-    if (typeof window !== "undefined") {
-      const urlParams = new URLSearchParams(window.location.search);
-      // 'key' 파라미터가 존재하면 재시도 모드로 간주
-      if (urlParams.has("key")) {
-        shouldSkipCheck = true;
-      }
-    }
-
-    if (currentUserId) {
-      loadQuizData(shouldSkipCheck);
-    } else if (useAuthStore.persist.hasHydrated()) {
-      if (!useAuthStore.getState().user) router.push("/login");
+    if (user?.id) {
+      loadQuizData(); // 인자 없이 호출
     }
 
     return () => unsubAuth();
-  }, [router, user?.id, loadQuizData]); // 🚨 의존성 배열에서 isRetry 제거
+  }, [router, user?.id, loadQuizData]); // 🚨 user?.id와 loadQuizData만 의존
 
-  // --- 🚀 퀴즈 완료 및 결과 제출 핸들러 ---
+  // --- 퀴즈 완료 및 결과 제출 핸들러 ---
   const handleQuizComplete = useCallback(
     async (finalAttempts: QuizAttempt[]) => {
       const currentUserId = user?.id;
@@ -159,7 +139,7 @@ export default function QuizPage() {
       setResults(finalResults);
 
       try {
-        // 4. 🌐 백엔드 API 호출: 결과 제출 및 활동 완료 기록
+        // 4. 🌐 백엔드 API 호출: 결과 제출 및 활동 완료 기록 (DailyActivityLog 기록)
         await submitQuizResults(finalResults);
 
         toast.success("퀴즈 완료! 결과를 확인합니다.");
@@ -282,15 +262,8 @@ export default function QuizPage() {
     );
   }
 
-  // 🚨 [최종 수정] URL에서 'key' 파라미터 존재 여부로 다시 풀기 상태를 확인합니다.
-  let isCurrentlyRetry = false;
-  if (typeof window !== "undefined") {
-    const urlParams = new URLSearchParams(window.location.search);
-    isCurrentlyRetry = urlParams.has("key");
-  }
-
-  // 퀴즈 완료 UI 표시 조건: 서버가 완료했다고 했고, 현재 세션이 재시도 모드가 아니면 표시
-  if (isAlreadyCompletedToday === true && !isCurrentlyRetry) {
+  // 🚨 [핵심] 퀴즈 완료 UI 표시 조건
+  if (isAlreadyCompletedToday === true) {
     return (
       <div className="max-w-xl mx-auto p-6 text-center mt-8">
         <CheckSquare className="w-16 h-16 text-green-500 mx-auto mb-4" />

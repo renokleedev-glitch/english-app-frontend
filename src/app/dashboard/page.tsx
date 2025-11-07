@@ -5,11 +5,11 @@ import { motion } from "framer-motion";
 import { useAuthStore } from "@/store/authStore";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { getTodayActivityStatus, resetQuizCompletion } from "@/lib/api"; // 🚨 resetQuizCompletion 임포트
+import { getTodayActivityStatus, resetQuizCompletion } from "@/lib/api";
 import { TodayActivityStatus } from "@/schemas";
 import Link from "next/link";
 import { BookOpen, HelpCircle, CheckCircle, Lock } from "lucide-react";
-import { toast } from "sonner"; // 🚨 toast 임포트
+import { toast } from "sonner";
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
@@ -119,14 +119,25 @@ export default function DashboardPage() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.4 }}
-      className="max-w-3xl mx-auto py-8 px-4 md:px-0"
+      // 🚨 [핵심] 페이지 전체 컨테이너는 배경을 투명하게 하여 body의 색상을 상속받습니다.
+      className="max-w-3xl mx-auto py-8 px-4 md:px-0 min-h-screen bg-transparent dark:bg-transparent"
     >
-      <h1 className="text-3xl font-semibold text-gray-800 dark:text-gray-100 mb-2">
-        안녕하세요, {user?.email}님! 👋
-      </h1>
-      <p className="text-gray-600 dark:text-gray-400 mb-8">
-        오늘의 학습 목표를 확인하고 시작해보세요.
-      </p>
+      {/* 🆕 [핵심 수정] 인사말 섹션을 명시적인 배경색을 가진 div로 감싸기 */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        // ✅ 배경색과 텍스트 색상 명시하여 대비 확보
+        className="p-6 mb-8 bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700"
+      >
+        <h1 className="text-3xl font-semibold text-gray-800 dark:text-gray-100 mb-2">
+          안녕하세요, {user?.email}님! 👋
+        </h1>
+        <p className="text-gray-600 dark:text-gray-400">
+          오늘의 학습 목표를 확인하고 시작해보세요.
+        </p>
+      </motion.div>
+      {/* ----------------------------------------------------------------- */}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* 미션 1: 오늘의 단어 학습 카드 */}
@@ -143,7 +154,8 @@ export default function DashboardPage() {
                 오늘의 단어 학습
               </h2>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            {/* 🚨 텍스트 명시성 확보를 위해 dark:text-gray-400 -> dark:text-gray-100 수정 */}
+            <p className="text-sm text-gray-600 dark:text-gray-100 mb-4">
               매일 꾸준히 단어를 학습하여 어휘력을 향상시키세요. 목표:{" "}
               <span className="font-medium">
                 {user?.daily_word_goal || 10}개
@@ -159,7 +171,7 @@ export default function DashboardPage() {
                 <span>오늘 학습 완료!</span>
               </div>
               <Link
-                href="/study/words"
+                href="/study/words?review=true"
                 className="inline-block px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition self-start"
               >
                 복습하기 →
@@ -189,7 +201,8 @@ export default function DashboardPage() {
                 단어 퀴즈
               </h2>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            {/* 🚨 텍스트 명시성 확보를 위해 dark:text-gray-400 -> dark:text-gray-100 수정 */}
+            <p className="text-sm text-gray-600 dark:text-gray-100 mb-4">
               학습한 단어를 퀴즈를 통해 복습하고 실력을 점검해보세요.
             </p>
           </div>
@@ -209,7 +222,7 @@ export default function DashboardPage() {
                 >
                   오답 노트 →
                 </Link>
-                <button // 🚨 [핵심 수정] Link 대신 Button으로 변경하여 함수 호출
+                <button
                   onClick={() => handleResetAndRetry("word_quiz")}
                   className="px-3 py-2 text-sm font-medium text-white bg-violet-600 rounded-md hover:bg-violet-700 transition"
                 >

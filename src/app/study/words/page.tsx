@@ -3,35 +3,64 @@
 
 import { motion } from "framer-motion";
 import { useAuthStore } from "@/store/authStore";
-import { useRouter } from "next/navigation";
-import { useEffect, useState, useCallback } from "react"; // 🚨 useCallback 임포트 추가
-import { getTodayWords, markStudyCompleted } from "@/lib/api"; // 🚨 markStudyCompleted 임포트
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState, useCallback } from "react";
+import { getTodayWords, markStudyCompleted } from "@/lib/api";
 import { Word } from "@/schemas";
 import WordCard from "@/components/WordCard";
 import { toast } from "sonner";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle } from "lucide-react"; // 🚨 CheckCircle 임포트 추가
+import { ArrowLeft, CheckCircle } from "lucide-react";
 
 export default function WordStudyPage() {
   const { user } = useAuthStore();
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // 🚨 [핵심] URL에서 'review=true'를 읽습니다.
+  const isReviewMode = searchParams.get("review") === "true";
 
   const [words, setWords] = useState<Word[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // 🚨 [핵심 추가] 학습 완료된 단어 ID를 추적하는 Set
-  const [completedWordIds, setCompletedWordIds] = useState<Set<number>>(
-    new Set()
-  );
-  const [isStudyMissionComplete, setIsStudyMissionComplete] = useState(false); // 최종 완료 상태
-
-  // progressMap은 onProgressUpdate 로직이 WordCard 내부로 이동하면서 단순 추적용으로 남겨둠
   const [progressMap, setProgressMap] = useState<
     Record<number, { en: number; ko: number }>
   >({});
 
-  // 🔐 로그인 상태 확인 및 리디렉션
+  const [completedWordIds, setCompletedWordIds] = useState<Set<number>>(
+    new Set()
+  );
+  const [isStudyMissionComplete, setIsStudyMissionComplete] = useState(false);
+
+  // 🚨 [핵심 로직] isReviewMode 플래그를 API에 전달
+  const fetchWords = useCallback(async () => {
+    if (!user?.id) return;
+
+    setIsLoading(true);
+    setError(null);
+    try {
+      // 🚨 [핵심 수정] API 호출 시 isReviewMode 전달
+      const wordsData = await getTodayWords(isReviewMode);
+      setWords(wordsData);
+
+      const initialProgress = wordsData.reduce((acc, word) => {
+        acc[word.id] = { en: 0, ko: 0 };
+        return acc;
+      }, {} as Record<number, { en: number; ko: number }>);
+
+      setProgressMap(initialProgress);
+      setCompletedWordIds(new Set());
+      setIsStudyMissionComplete(false);
+    } catch (err: any) {
+      console.error("단어 목록 로딩 실패:", err);
+      setError("단어 목록을 불러오는 데 실패했습니다.");
+      toast.error("단어 목록 로딩 실패");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user?.id, isReviewMode]);
+
+  // 🔐 데이터 로딩 및 인증 확인
   useEffect(() => {
     const unsub = useAuthStore.persist.onFinishHydration(() => {
       if (!useAuthStore.getState().user) router.push("/login");
@@ -40,36 +69,7 @@ export default function WordStudyPage() {
       router.push("/login");
     }
 
-    // ✅ 오늘의 단어 가져오기
-    const fetchWords = async () => {
-      if (!useAuthStore.getState().user) return;
-
-      setIsLoading(true);
-      setError(null);
-      try {
-        const wordsData = await getTodayWords();
-        setWords(wordsData);
-
-        const initialProgress = wordsData.reduce((acc, word) => {
-          // TODO: 백엔드에서 실제 progress 가져오기 (현재는 0으로 초기화)
-          acc[word.id] = { en: 0, ko: 0 };
-          return acc;
-        }, {} as Record<number, { en: number; ko: number }>);
-
-        setProgressMap(initialProgress);
-        setCompletedWordIds(new Set());
-        setIsStudyMissionComplete(false);
-      } catch (err: any) {
-        console.error("단어 목록 로딩 실패:", err);
-        setError("단어 목록을 불러오는 데 실패했습니다.");
-        toast.error("단어 목록 로딩 실패");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    // 사용자 확인 후 단어 가져오기
-    if (useAuthStore.persist.hasHydrated() && useAuthStore.getState().user) {
+    if (user?.id) {
       fetchWords();
     } else {
       const unsubHydration = useAuthStore.persist.onFinishHydration(() => {
@@ -87,9 +87,9 @@ export default function WordStudyPage() {
       };
     }
     return () => unsub();
-  }, [router, user?.id]);
+  }, [router, user?.id, fetchWords]);
 
-  // ✅ WordCard에서 학습 진행도 업데이트 시 호출될 콜백 함수 (카운터 추적용)
+  // ✅ WordCard에서 학습 진행도 업데이트 시 호출될 콜백 함수
   const handleProgressUpdate = (
     wordId: number,
     lang: "en" | "ko",
@@ -104,54 +104,46 @@ export default function WordStudyPage() {
     }));
   };
 
+  // 🚀 개별 단어 학습이 완전히 완료되었을 때 호출되는 콜백
   const handleWordComplete = useCallback(
     async (wordId: number) => {
-      const currentUserId = user?.id;
-
-      // 1. 상태 업데이트를 함수형으로 변경하여 종속성에서 completedWordIds 제거
-      let allWordsCompleted = false;
-      let finalCompletedIds: Set<number> | undefined;
+      const userId = user?.id;
 
       setCompletedWordIds((prevIds) => {
-        // 💡 중요한 체크: 이미 완료된 단어라면 아무것도 하지 않습니다.
         if (prevIds.has(wordId)) {
           return prevIds;
         }
 
         const newCompletedIds = new Set(prevIds).add(wordId);
-        finalCompletedIds = newCompletedIds;
 
-        // 모든 단어가 완료되었는지 검사 (words 배열은 종속성에 유지되어야 함)
-        allWordsCompleted =
-          words.length > 0 &&
-          words.every((word) => newCompletedIds.has(word.id));
+        // 복습 모드가 아닐 때만 미션 완료 API 호출을 시도합니다.
+        if (!isReviewMode) {
+          const allWordsCompleted =
+            words.length > 0 &&
+            words.every((word) => newCompletedIds.has(word.id));
 
+          if (allWordsCompleted && !isStudyMissionComplete) {
+            setIsStudyMissionComplete(true);
+            if (!userId) {
+              toast.error("사용자 정보가 없어 학습 완료를 기록할 수 없습니다.");
+              return newCompletedIds;
+            }
+            try {
+              markStudyCompleted(userId); // 🚨 API 호출
+              toast.success(
+                "🎉 오늘의 단어 학습 미션 완료! 퀴즈를 풀어보세요."
+              );
+            } catch (e) {
+              console.error("Failed to mark study completion:", e);
+              toast.error("학습 완료 상태 기록에 실패했습니다.");
+            }
+          }
+        }
         return newCompletedIds;
       });
-
-      // 2. 미션 완료 API 호출 (useCallback 종속성 외부에서 결정된 allWordsCompleted 사용)
-      // 💡 단어 개수 확인 로직을 분리하여 무한 루프 위험을 최소화합니다.
-      if (allWordsCompleted && !isStudyMissionComplete) {
-        setIsStudyMissionComplete(true);
-
-        if (!currentUserId) {
-          toast.error("사용자 정보가 없어 학습 완료를 기록할 수 없습니다.");
-          return;
-        }
-
-        try {
-          await markStudyCompleted(currentUserId);
-          toast.success("🎉 오늘의 단어 학습 미션 완료! 퀴즈를 풀어보세요.");
-        } catch (e) {
-          console.error("Failed to mark study completion:", e);
-          toast.error(
-            "학습 완료 상태 기록에 실패했습니다. 대시보드를 확인하세요."
-          );
-        }
-      }
     },
-    [words, isStudyMissionComplete, user?.id]
-  ); // 🚨 종속성에서 completedWordIds 제거
+    [words.length, isStudyMissionComplete, user?.id, isReviewMode]
+  );
 
   // --- UI 렌더링 ---
   if (isLoading) {
@@ -183,7 +175,9 @@ export default function WordStudyPage() {
   }
 
   const isNoWordsToStudy = !isLoading && words.length === 0;
-  const finalMissionCompleted = isStudyMissionComplete || isNoWordsToStudy;
+  // 복습 모드가 아니면서 단어가 없으면 미션 완료로 간주합니다.
+  const finalMissionCompleted =
+    isStudyMissionComplete || (isNoWordsToStudy && !isReviewMode);
 
   return (
     <motion.div
@@ -203,12 +197,23 @@ export default function WordStudyPage() {
         </Link>
       </div>
 
-      <h1 className="text-3xl font-semibold text-blue-600 dark:text-blue-400 mb-4 text-center">
-        오늘의 단어 학습 📖
-      </h1>
-      <p className="text-center text-gray-600 dark:text-gray-300 mb-8">
-        목표: {words.length}개 단어 / 각 단어별 영어, 한국어 3번 듣기
-      </p>
+      {/* 🆕 [핵심 수정] 제목과 목표 설명을 독립된 카드로 감싸기 */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        // ✅ 카드 스타일 적용 (다른 WordCard와 일관성 유지)
+        className="p-6 mb-8 bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 text-center"
+      >
+        <h1 className="text-3xl font-semibold text-blue-600 dark:text-blue-400 mb-2">
+          {isReviewMode ? "단어 복습하기" : "오늘의 단어 학습"} 📖
+        </h1>
+        {/* 🚨 텍스트 색상을 카드의 배경색(dark:bg-gray-800)에 맞춰 dark:text-gray-100으로 설정 */}
+        <p className="text-center text-gray-600 dark:text-gray-100">
+          목표: {words.length}개 단어 / 각 단어별 영어, 한국어 3번 듣기
+        </p>
+      </motion.div>
+      {/* ----------------------------------------------------------------- */}
 
       {/* 학습 완료 메시지 및 다음 단계 버튼 */}
       {finalMissionCompleted && (
@@ -227,20 +232,20 @@ export default function WordStudyPage() {
       )}
 
       {/* 단어 목록 렌더링 */}
-      {!finalMissionCompleted && words.length > 0 && (
+      {words.length > 0 && (!finalMissionCompleted || isReviewMode) && (
         <div className="space-y-4">
           {words.map((word) => (
             <WordCard
               key={word.id}
               word={word}
               onProgressUpdate={handleProgressUpdate}
-              onStudyComplete={handleWordComplete} // 🚨 단어 완료 콜백 연결
+              onStudyComplete={handleWordComplete}
             />
           ))}
         </div>
       )}
 
-      {/* 학습할 단어가 없는데 완료 메시지가 표시되지 않은 경우 */}
+      {/* 학습할 단어가 없는데 미션 완료 상태가 아닌 경우 */}
       {words.length === 0 && !isLoading && !finalMissionCompleted && (
         <div className="text-center p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
           <p className="text-red-600 dark:text-red-400 font-semibold mb-4">

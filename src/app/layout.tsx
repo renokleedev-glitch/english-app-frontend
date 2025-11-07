@@ -50,10 +50,12 @@ export default function RootLayout({
   return (
     // ✅ 동적 class 빼고, 경고 억제 플래그만
     <html lang="ko" suppressHydrationWarning>
-      {/* body 쪽 class는 고정된 문자열(SSR/CSR 동일)로 */}
-      <body className="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors min-h-screen">
+      {/* 🚨 [핵심 수정 1] body에서 min-h-screen을 제거하고, 
+             Tailwind 색상 클래스를 유지하여 CSS 변수가 작동하도록 합니다. */}
+      <body className="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors">
         {mounted && <Navbar />}
-        <main className="px-6 py-4 mt-16">{children}</main>
+        {/* 🚨 [핵심 수정 2] min-h-screen을 main 태그로 이동하여 콘텐츠 높이를 확보합니다. */}
+        <main className="px-6 py-4 mt-16 min-h-screen">{children}</main>
       </body>
     </html>
   );

@@ -134,9 +134,14 @@ export async function getTodayActivityStatus(): Promise<TodayActivityStatus> {
 }
 
 // --- Words ---
-export async function getTodayWords(): Promise<Word[]> {
+export async function getTodayWords(
+  isReview: boolean = false
+): Promise<Word[]> {
   try {
-    const { data } = await api.get("/api/words/today");
+    const { data } = await api.get("/api/words/today", {
+      // 🚨 쿼리 파라미터로 is_review 전달
+      params: { is_review: isReview },
+    });
     return data;
   } catch (e) {
     if ((e as AxiosError).response?.status !== 401) {
