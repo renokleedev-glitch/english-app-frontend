@@ -4,13 +4,17 @@
 import { motion } from "framer-motion";
 import { useAuthStore } from "@/store/authStore";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useCallback } from "react"; // 🚨 useCallback 임포트 추가
-import { getTodayWords, markStudyCompleted } from "@/lib/api"; // 🚨 markStudyCompleted 임포트
+import { useEffect, useState, useCallback } from "react";
+import {
+  getTodayWords,
+  recordListenAction,
+  markStudyCompleted,
+} from "@/lib/api"; // 🚨 markStudyCompleted 임포트
 import { Word } from "@/schemas";
 import WordCard from "@/components/WordCard";
 import { toast } from "sonner";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle } from "lucide-react"; // 🚨 CheckCircle 임포트 추가
+import { ArrowLeft, CheckCircle } from "lucide-react";
 
 export default function WordStudyPage() {
   const { user } = useAuthStore();
@@ -19,6 +23,9 @@ export default function WordStudyPage() {
   const [words, setWords] = useState<Word[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [progressMap, setProgressMap] = useState<
+    Record<number, { en: number; ko: number }>
+  >({});
 
   // 🚨 [핵심 추가] 학습 완료된 단어 ID를 추적하는 Set
   const [completedWordIds, setCompletedWordIds] = useState<Set<number>>(
@@ -26,13 +33,9 @@ export default function WordStudyPage() {
   );
   const [isStudyMissionComplete, setIsStudyMissionComplete] = useState(false); // 최종 완료 상태
 
-  // progressMap은 onProgressUpdate 로직이 WordCard 내부로 이동하면서 단순 추적용으로 남겨둠
-  const [progressMap, setProgressMap] = useState<
-    Record<number, { en: number; ko: number }>
-  >({});
-
-  // 🔐 로그인 상태 확인 및 리디렉션
+  // --- 데이터 로딩 및 완료 상태 확인 ---
   useEffect(() => {
+    // 기존 로그인 확인 및 Hydration 로직 유지
     const unsub = useAuthStore.persist.onFinishHydration(() => {
       if (!useAuthStore.getState().user) router.push("/login");
     });
@@ -50,13 +53,14 @@ export default function WordStudyPage() {
         const wordsData = await getTodayWords();
         setWords(wordsData);
 
+        // TODO: 백엔드에서 실제 progress 가져오기 (현재는 0으로 초기화)
         const initialProgress = wordsData.reduce((acc, word) => {
-          // TODO: 백엔드에서 실제 progress 가져오기 (현재는 0으로 초기화)
           acc[word.id] = { en: 0, ko: 0 };
           return acc;
-        }, {} as Record<number, { en: number; ko: number }>);
-
+        }, {} as Record<number, { en: 0; ko: 0 }>);
         setProgressMap(initialProgress);
+
+        // 새로운 학습 시작 시, 완료 Set 초기화
         setCompletedWordIds(new Set());
         setIsStudyMissionComplete(false);
       } catch (err: any) {
@@ -68,7 +72,6 @@ export default function WordStudyPage() {
       }
     };
 
-    // 사용자 확인 후 단어 가져오기
     if (useAuthStore.persist.hasHydrated() && useAuthStore.getState().user) {
       fetchWords();
     } else {
@@ -87,7 +90,7 @@ export default function WordStudyPage() {
       };
     }
     return () => unsub();
-  }, [router, user?.id]);
+  }, [router, user?.id]); // user?.id를 종속성에 추가하여 로그인 후 로드 보장
 
   // ✅ WordCard에서 학습 진행도 업데이트 시 호출될 콜백 함수 (카운터 추적용)
   const handleProgressUpdate = (
@@ -104,54 +107,39 @@ export default function WordStudyPage() {
     }));
   };
 
+  // 🚀 [핵심 추가] 개별 단어 학습이 완전히 완료되었을 때 호출되는 콜백
   const handleWordComplete = useCallback(
     async (wordId: number) => {
-      const currentUserId = user?.id;
+      const newCompletedIds = new Set(completedWordIds).add(wordId);
+      setCompletedWordIds(newCompletedIds);
 
-      // 1. 상태 업데이트를 함수형으로 변경하여 종속성에서 completedWordIds 제거
-      let allWordsCompleted = false;
-      let finalCompletedIds: Set<number> | undefined;
+      // 💡 모든 단어가 완료되었는지 검사
+      const allWordsCompleted = words.every((word) =>
+        newCompletedIds.has(word.id)
+      );
 
-      setCompletedWordIds((prevIds) => {
-        // 💡 중요한 체크: 이미 완료된 단어라면 아무것도 하지 않습니다.
-        if (prevIds.has(wordId)) {
-          return prevIds;
-        }
-
-        const newCompletedIds = new Set(prevIds).add(wordId);
-        finalCompletedIds = newCompletedIds;
-
-        // 모든 단어가 완료되었는지 검사 (words 배열은 종속성에 유지되어야 함)
-        allWordsCompleted =
-          words.length > 0 &&
-          words.every((word) => newCompletedIds.has(word.id));
-
-        return newCompletedIds;
-      });
-
-      // 2. 미션 완료 API 호출 (useCallback 종속성 외부에서 결정된 allWordsCompleted 사용)
-      // 💡 단어 개수 확인 로직을 분리하여 무한 루프 위험을 최소화합니다.
       if (allWordsCompleted && !isStudyMissionComplete) {
         setIsStudyMissionComplete(true);
+        const userId = user?.id;
 
-        if (!currentUserId) {
+        if (!userId) {
           toast.error("사용자 정보가 없어 학습 완료를 기록할 수 없습니다.");
           return;
         }
 
         try {
-          await markStudyCompleted(currentUserId);
+          // 🌐 API 호출: 오늘의 단어 학습 완료 기록
+          await markStudyCompleted(userId);
           toast.success("🎉 오늘의 단어 학습 미션 완료! 퀴즈를 풀어보세요.");
+          // UI가 자동으로 완료 메시지를 표시하고 퀴즈 풀기 버튼을 활성화합니다.
         } catch (e) {
           console.error("Failed to mark study completion:", e);
-          toast.error(
-            "학습 완료 상태 기록에 실패했습니다. 대시보드를 확인하세요."
-          );
+          toast.error("학습 완료 상태 기록에 실패했습니다.");
         }
       }
     },
-    [words, isStudyMissionComplete, user?.id]
-  ); // 🚨 종속성에서 completedWordIds 제거
+    [completedWordIds, words, isStudyMissionComplete, user?.id]
+  );
 
   // --- UI 렌더링 ---
   if (isLoading) {

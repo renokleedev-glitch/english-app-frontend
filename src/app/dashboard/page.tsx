@@ -1,29 +1,27 @@
+// src/app/dashboard/page.tsx
 "use client";
 
 import { motion } from "framer-motion";
 import { useAuthStore } from "@/store/authStore";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-// ✅ [수정] getTodayWords 대신 getTodayActivityStatus 임포트
-import { getTodayActivityStatus } from "@/lib/api";
-// ✅ [수정] Word 타입 대신 TodayActivityStatus 타입 임포트
+import { getTodayActivityStatus, resetQuizCompletion } from "@/lib/api"; // 🚨 resetQuizCompletion 임포트
 import { TodayActivityStatus } from "@/schemas";
-import Link from "next/link"; // 페이지 이동을 위한 Link 컴포넌트
-import { BookOpen, HelpCircle, CheckCircle } from "lucide-react"; // 아이콘 추가
+import Link from "next/link";
+import { BookOpen, HelpCircle, CheckCircle, Lock } from "lucide-react";
+import { toast } from "sonner"; // 🚨 toast 임포트
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
   const router = useRouter();
 
-  // ✅ [수정] words 상태 대신 activityStatus 상태 추가
   const [activityStatus, setActivityStatus] =
     useState<TodayActivityStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // 🔐 로그인 상태 확인 및 리디렉션
+  // 🔐 로그인 상태 확인 및 오늘의 활동 상태 가져오기
   useEffect(() => {
-    // ... (이전과 동일한 로그인 확인 로직)
     const unsub = useAuthStore.persist.onFinishHydration(() => {
       if (!useAuthStore.getState().user) router.push("/login");
     });
@@ -31,9 +29,8 @@ export default function DashboardPage() {
       router.push("/login");
     }
 
-    // ✅ [수정] 오늘의 활동 상태 가져오기
     const fetchStatus = async () => {
-      if (!useAuthStore.getState().user) return; // 사용자가 없으면 중단
+      if (!useAuthStore.getState().user) return;
 
       setIsLoading(true);
       setError(null);
@@ -48,13 +45,11 @@ export default function DashboardPage() {
       }
     };
 
-    // 사용자 확인 후 상태 가져오기
     if (useAuthStore.persist.hasHydrated() && useAuthStore.getState().user) {
       fetchStatus();
     } else {
       const unsubHydration = useAuthStore.persist.onFinishHydration(() => {
         if (useAuthStore.getState().user) fetchStatus();
-        // 사용자가 여전히 없으면 로그인 페이지로 리디렉션
         else if (
           !useAuthStore.getState().user &&
           useAuthStore.persist.hasHydrated()
@@ -68,10 +63,48 @@ export default function DashboardPage() {
       };
     }
     return () => unsub();
-  }, [router]); // user 상태 변경 시 재호출 불필요 (최초 로드 시 한 번)
+  }, [router]);
+
+  // 🚀 [핵심 추가] 퀴즈 완료 기록 삭제 및 재시작 함수
+  const handleResetAndRetry = async (activityType: string) => {
+    if (!user?.id) {
+      toast.error("사용자 정보가 없어 다시 풀기를 실행할 수 없습니다.");
+      return;
+    }
+
+    if (!confirm("오늘 퀴즈 완료 기록을 삭제하고 다시 푸시겠습니까?")) {
+      return; // 사용자가 취소함
+    }
+
+    toast.loading("완료 상태를 초기화 중...");
+
+    try {
+      // 1. 서버의 DailyActivityLog 기록 삭제
+      await resetQuizCompletion(activityType);
+
+      toast.dismiss();
+      toast.success("초기화 완료! 퀴즈 페이지로 이동합니다.");
+
+      // 2. 대시보드 상태 즉시 갱신
+      setActivityStatus((prev) => ({ ...prev!, word_quiz: false }));
+
+      // 3. 퀴즈 페이지로 이동
+      router.push("/quiz");
+    } catch (e) {
+      toast.dismiss();
+      toast.error("초기화 실패. 잠시 후 다시 시도해주세요.");
+    }
+  };
 
   // --- UI 렌더링 ---
-  if (isLoading) {
+  if (isLoading || activityStatus === null || !user) {
+    if (error)
+      return (
+        <div className="min-h-[80vh] flex items-center justify-center">
+          <p className="text-red-500">{error}</p>
+        </div>
+      );
+    if (!user) return null; // 로그인 리디렉션 처리 중
     return (
       <div className="min-h-[80vh] flex items-center justify-center">
         <p className="text-gray-500 dark:text-gray-400 animate-pulse">
@@ -81,32 +114,12 @@ export default function DashboardPage() {
     );
   }
 
-  if (error) {
-    return (
-      <div className="min-h-[80vh] flex items-center justify-center">
-        <p className="text-red-500">{error}</p>
-      </div>
-    );
-  }
-
-  // 로그인되지 않았거나 상태 로드 실패 시 (이론상 도달하기 어려움)
-  if (!user || activityStatus === null) {
-    return (
-      <div className="min-h-[80vh] flex items-center justify-center">
-        <p className="text-gray-500 dark:text-gray-400">
-          사용자 정보를 불러올 수 없습니다.
-        </p>
-      </div>
-    );
-  }
-
-  // ✅ [수정] 대시보드 요약 UI
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.4 }}
-      className="max-w-3xl mx-auto py-8 px-4 md:px-0" // 패딩 조정
+      className="max-w-3xl mx-auto py-8 px-4 md:px-0"
     >
       <h1 className="text-3xl font-semibold text-gray-800 dark:text-gray-100 mb-2">
         안녕하세요, {user?.email}님! 👋
@@ -116,7 +129,7 @@ export default function DashboardPage() {
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* 오늘의 단어 학습 카드 */}
+        {/* 미션 1: 오늘의 단어 학습 카드 */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -132,26 +145,37 @@ export default function DashboardPage() {
             </div>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
               매일 꾸준히 단어를 학습하여 어휘력을 향상시키세요. 목표:{" "}
-              {user?.daily_word_goal || 10}개
+              <span className="font-medium">
+                {user?.daily_word_goal || 10}개
+              </span>
             </p>
           </div>
-          {/* ⚠️ 'word_study' 완료 상태는 아직 기록 로직이 없으므로 항상 미완료로 보일 수 있습니다. */}
+
+          {/* 학습 미션 버튼 로직 */}
           {activityStatus.word_study ? (
-            <div className="flex items-center text-green-600 dark:text-green-400 font-medium mt-4">
-              <CheckCircle className="w-5 h-5 mr-1" />
-              <span>오늘 학습 완료!</span>
+            <div className="flex flex-col mt-4">
+              <div className="flex items-center text-green-600 dark:text-green-400 font-medium mb-3">
+                <CheckCircle className="w-5 h-5 mr-1" />
+                <span>오늘 학습 완료!</span>
+              </div>
+              <Link
+                href="/study/words"
+                className="inline-block px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition self-start"
+              >
+                복습하기 →
+              </Link>
             </div>
           ) : (
             <Link
-              href="/study/words" // ✅ 단어 학습 페이지 경로 (새로 만들어야 함)
-              className="mt-4 inline-block px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition self-start" // self-start 추가
+              href="/study/words"
+              className="mt-4 inline-block px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition self-start"
             >
               학습 시작하기 →
             </Link>
           )}
         </motion.div>
 
-        {/* 단어 퀴즈 카드 */}
+        {/* 미션 2: 단어 퀴즈 카드 */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -169,18 +193,51 @@ export default function DashboardPage() {
               학습한 단어를 퀴즈를 통해 복습하고 실력을 점검해보세요.
             </p>
           </div>
+
+          {/* 🔑 퀴즈 잠금/해제 로직 적용 */}
           {activityStatus.word_quiz ? (
-            <div className="flex items-center text-green-600 dark:text-green-400 font-medium mt-4">
-              <CheckCircle className="w-5 h-5 mr-1" />
-              <span>오늘 퀴즈 완료!</span>
+            // 상태 3: 퀴즈 완료 (다시 풀기 버튼에 연결)
+            <div className="flex flex-col mt-4 self-start w-full">
+              <div className="flex items-center text-green-600 dark:text-green-400 font-medium mb-3">
+                <CheckCircle className="w-5 h-5 mr-1" />
+                <span>오늘 퀴즈 완료!</span>
+              </div>
+              <div className="flex space-x-2">
+                <Link
+                  href="/wrong-note"
+                  className="px-3 py-2 text-sm font-medium text-white bg-red-500 rounded-md hover:bg-red-600 transition"
+                >
+                  오답 노트 →
+                </Link>
+                <button // 🚨 [핵심 수정] Link 대신 Button으로 변경하여 함수 호출
+                  onClick={() => handleResetAndRetry("word_quiz")}
+                  className="px-3 py-2 text-sm font-medium text-white bg-violet-600 rounded-md hover:bg-violet-700 transition"
+                >
+                  다시 풀기
+                </button>
+              </div>
             </div>
-          ) : (
+          ) : activityStatus.word_study ? (
+            // 상태 2: 학습 완료, 퀴즈 해제 (Link 유지)
             <Link
-              href="/quiz" // ✅ 기존 퀴즈 페이지 경로
+              href="/quiz"
               className="mt-4 inline-block px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-md hover:bg-violet-700 transition self-start"
             >
               퀴즈 풀기 →
             </Link>
+          ) : (
+            // 상태 1: 학습 미완료, 퀴즈 잠금 (유지)
+            <div className="mt-4 flex flex-col self-start">
+              <button
+                disabled
+                className="px-4 py-2 text-sm font-medium text-white bg-gray-400 dark:bg-gray-600 rounded-md cursor-not-allowed self-start"
+              >
+                <Lock className="w-4 h-4 mr-1 inline-block" /> 퀴즈 풀기 (잠김)
+              </button>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 flex items-center">
+                오늘의 단어 학습을 먼저 완료해주세요.
+              </p>
+            </div>
           )}
         </motion.div>
 

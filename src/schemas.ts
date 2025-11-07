@@ -56,9 +56,69 @@ export interface MultipleChoiceQuiz {
   correct_option_id: number; // 정답 선택지의 ID
 }
 
+// ✅ [핵심 추가] 퀴즈 생성/요청 시 필요한 데이터 타입 (POST Body)
+export interface QuizCreate {
+  user_id: number; // 퀴즈 출제 기준이 되는 사용자 ID (인증 과정에서 추출)
+  subject?: string; // (선택적) 과목/주제 (예: '수능', '내신')
+  unit?: string; // (선택적) 세부 단위 (예: '1과', '2023년')
+  isTest?: boolean; // (선택적) 시험 모드 여부
+}
+
+// --- ✅ [핵심 추가] O/X 퀴즈 관련 타입 ---
+export interface OXQuiz {
+  question_word: Word; // 발음할 단어 정보
+  display_text: string; // 화면에 표시될 텍스트 (영어 또는 한국어)
+  display_type: "text" | "meaning"; // 표시된 텍스트 유형
+  correct_answer: boolean; // 정답 (True: 일치, False: 불일치)
+}
+
 // --- ✅ [핵심 추가] 오늘의 활동 완료 상태 타입 ---
 export interface TodayActivityStatus {
   word_study: boolean; // 오늘의 단어 학습 완료 여부
   word_quiz: boolean; // 단어 퀴즈 완료 여부
   // grammar_quiz?: boolean; // 나중에 추가될 활동들
+}
+
+export interface QuizAttempt {
+  question_word: Word; // 👈 Word 객체 전체 포함 (렌더링에 필수)
+  is_correct: boolean;
+  user_answer: string; // 사용자가 선택한 옵션의 텍스트
+  correct_answer: string; // 정답 옵션의 텍스트
+  quiz_type: string;
+  user_selected_option_id?: number | null;
+  correct_option_id?: number;
+}
+
+// 🚨 QuizAttemptDetailCreate 타입이 위에 정의되어 있어야 합니다. (이전에 추가 완료)
+import { QuizAttemptDetailCreate } from "./schemas"; // 혹은 파일 내부에 정의되어 있다고 가정
+
+/**
+ * 퀴즈 결과 제출 시 사용할 전체 스키마 (백엔드 POST /api/quiz/submit-results용)
+ * 현재는 DailyActivityLog 기록을 위한 최소 정보를 담습니다.
+ */
+export interface QuizResultsSubmission {
+  activity_type: string;
+  total_questions: number;
+  correct_count: number;
+
+  // ✅ [핵심 추가] 클라이언트 렌더링용 원본 시도 기록
+  attempts: QuizAttempt[];
+
+  // ✅ [핵심 추가] 서버 제출용 상세 기록 (ID와 텍스트만 포함)
+  details: QuizAttemptDetailCreate[];
+}
+export interface QuizAttempt {
+  question_word: Word; // 문제가 출제된 단어 전체 정보
+  is_correct: boolean;
+
+  // 🚨 [핵심 추가] 422 오류 해결 및 서버 제출을 위해 필요한 필드
+  user_answer: string; // 사용자가 선택한 옵션의 텍스트 (뜻)
+  correct_answer: string; // 정답 옵션의 텍스트 (뜻)
+  quiz_type: string; // 'word_quiz' 또는 'ox_quiz'
+
+  // (선택 사항: 객관식 또는 O/X 전용 필드는 optional)
+  user_selected_option_id?: number | null;
+  correct_option_id?: number;
+  user_answer_ox?: boolean | null;
+  correct_answer_ox?: boolean;
 }

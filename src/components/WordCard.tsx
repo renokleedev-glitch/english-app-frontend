@@ -7,27 +7,48 @@ import { Word } from "@/schemas"; // 타입 임포트
 import { recordListenAction } from "@/lib/api"; // API 함수 임포트
 import { toast } from "sonner"; // 알림 라이브러리
 
-// WordCard가 받을 props 타입 정의
 interface WordCardProps {
   word: Word;
-  // 단어 학습 상태가 변경될 때 호출될 콜백 (선택 사항)
+  // ✅ 초기 진행 상태 (부모로부터 받음)
+  initialProgress?: { en: number; ko: number };
+  // ✅ 진행도 업데이트 시 부모에게 알림 (카운터용)
   onProgressUpdate?: (wordId: number, lang: "en" | "ko", count: number) => void;
+  // ✅ [핵심 추가] 영어/한국어 3회 듣기 모두 완료 시 호출
+  onStudyComplete: (wordId: number) => void;
 }
 
-export default function WordCard({ word, onProgressUpdate }: WordCardProps) {
-  // ✅ 상태 변수 분리 및 추가
-  const [englishPlayCount, setEnglishPlayCount] = useState(0);
-  const [koreanPlayCount, setKoreanPlayCount] = useState(0);
+export default function WordCard({
+  word,
+  initialProgress,
+  onProgressUpdate,
+  onStudyComplete,
+}: WordCardProps) {
+  // ✅ 초기 상태를 initialProgress prop으로 설정
+  const [englishPlayCount, setEnglishPlayCount] = useState(
+    initialProgress?.en || 0
+  );
+  const [koreanPlayCount, setKoreanPlayCount] = useState(
+    initialProgress?.ko || 0
+  );
   const [playingLanguage, setPlayingLanguage] = useState<"en" | "ko" | null>(
     null
-  ); // 'en', 'ko', null
-  const [isEnglishCompleted, setIsEnglishCompleted] = useState(false);
-  const [isKoreanCompleted, setIsKoreanCompleted] = useState(false);
+  );
+  const [isEnglishCompleted, setIsEnglishCompleted] = useState(
+    (initialProgress?.en || 0) >= 3
+  );
+  const [isKoreanCompleted, setIsKoreanCompleted] = useState(
+    (initialProgress?.ko || 0) >= 3
+  );
 
-  // ✅ 초기 상태 설정 (페이지 로드 시 기존 진행도 반영 - 추후 구현)
-  // useEffect(() => {
-  //   // TODO: 백엔드에서 초기 progress 데이터를 받아와서 count 및 completed 상태 설정
-  // }, [word.id]);
+  // ✅ [핵심 추가] 두 언어 모두 완료되었는지 감지하는 useEffect
+  useEffect(() => {
+    // isEnglishCompleted와 isKoreanCompleted가 모두 true일 때 onStudyComplete 콜백 호출
+    if (isEnglishCompleted && isKoreanCompleted) {
+      console.log(`WordCard ${word.id} (${word.text}) is fully completed.`);
+      onStudyComplete(word.id);
+    }
+    // onStudyComplete, word.id는 일반적으로 변경되지 않지만, ESLint 규칙을 위해 포함
+  }, [isEnglishCompleted, isKoreanCompleted, onStudyComplete, word.id]);
 
   // ✅ 언어별 오디오 재생 함수
   const handlePlayAudio = async (language: "en" | "ko") => {
@@ -96,6 +117,9 @@ export default function WordCard({ word, onProgressUpdate }: WordCardProps) {
           if (language === "en") setEnglishPlayCount(currentPlay);
           else setKoreanPlayCount(currentPlay);
 
+          // ✅ 부모 페이지에 카운트 업데이트 알림
+          onProgressUpdate?.(word.id, language, currentPlay);
+
           if (currentPlay < 3) {
             setTimeout(() => window.speechSynthesis.speak(utterance), 200);
           } else {
@@ -103,18 +127,14 @@ export default function WordCard({ word, onProgressUpdate }: WordCardProps) {
             // ✅ 백엔드 API 호출
             try {
               await recordListenAction(word.id, language);
-              console.log(
-                `Recorded listen action for ${word.id} (${language})`
-              );
+              // ✅ [수정] 3회 완료 시 해당 언어 완료 상태 true로 설정
               if (language === "en") setIsEnglishCompleted(true);
               else setIsKoreanCompleted(true);
-              onProgressUpdate?.(word.id, language, 3); // 상태 변경 콜백 호출
             } catch (apiError: any) {
               console.error("API Error:", apiError);
               toast.error(
                 `학습 기록 저장 실패 (${language}): ${apiError.message}`
               );
-              // API 실패 시 카운트 롤백 또는 재시도 로직 추가 가능
               if (language === "en") setEnglishPlayCount(0);
               else setKoreanPlayCount(0);
             }

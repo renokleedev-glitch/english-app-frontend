@@ -1,23 +1,34 @@
+// src/app/quiz/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+// useSearchParams 대신 useRouter만 사용합니다.
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { motion } from "framer-motion";
-import { Volume2, XCircle, CheckSquare, Link, ArrowLeft } from "lucide-react";
+import { Volume2, ArrowLeft, CheckSquare } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
+import { useQuizStore } from "@/store/quizStore";
 import {
-  getMultipleChoiceQuiz,
-  markQuizCompleted,
+  getMultipleChoiceQuizSet,
+  submitQuizResults,
   checkQuizCompletionStatus,
 } from "@/lib/api";
-import { MultipleChoiceQuiz, QuizOption } from "@/schemas";
+import {
+  MultipleChoiceQuiz,
+  QuizAttempt,
+  QuizResultsSubmission,
+  QuizAttemptDetailCreate,
+} from "@/schemas";
 import { toast } from "sonner";
+import { XCircle } from "lucide-react";
 
-const QUIZ_LENGTH = 10;
+const QUIZ_ACTIVITY_TYPE = "word_quiz";
 
 export default function QuizPage() {
   const router = useRouter();
   const { user } = useAuthStore();
+  const { setResults } = useQuizStore();
 
   const [quizzes, setQuizzes] = useState<MultipleChoiceQuiz[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -26,68 +37,54 @@ export default function QuizPage() {
   const [selectedOptionId, setSelectedOptionId] = useState<number | null>(null);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
-  const [quizCompleted, setQuizCompleted] = useState(false);
+  const [isProcessingResults, setIsProcessingResults] = useState(false);
   const [isAlreadyCompletedToday, setIsAlreadyCompletedToday] = useState<
     boolean | null
   >(null);
 
-  // --- 데이터 로딩 및 완료 상태 확인 ---
-  useEffect(() => {
-    // 로그인 상태 확인
-    const unsubAuth = useAuthStore.persist.onFinishHydration(() => {
-      // Hydration 완료 후 사용자 없으면 로그인 페이지로
-      if (!useAuthStore.getState().user) {
-        console.log("QuizPage: Not logged in after hydration, redirecting...");
-        router.push("/login");
-      }
-    });
-    // Hydration 전에 이미 사용자 없으면 로그인 페이지로
-    if (useAuthStore.persist.hasHydrated() && !useAuthStore.getState().user) {
-      console.log("QuizPage: Not logged in initially, redirecting...");
-      router.push("/login");
-    }
+  const [quizAttempts, setQuizAttempts] = useState<QuizAttempt[]>([]);
 
-    const loadQuizData = async () => {
-      // ✅ 사용자 정보가 로드된 후에만 진행 (로그인 확인 강화)
-      if (!useAuthStore.getState().user) {
-        console.log("QuizPage: User not available, skipping quiz load.");
-        setIsLoading(false); // 로딩 종료
+  // loadQuizData 함수는 shouldSkipCheck 인수를 받아 사용합니다.
+  const loadQuizData = useCallback(
+    async (shouldSkipCheck: boolean) => {
+      const currentUserId = user?.id;
+
+      if (!currentUserId) {
+        setIsLoading(false);
         return;
       }
 
       setIsLoading(true);
       setError(null);
-      setIsAlreadyCompletedToday(null);
+      setIsAlreadyCompletedToday(null); // 로딩 시작 시 null로 초기화
 
       try {
-        const completed = await checkQuizCompletionStatus("word_quiz");
-        setIsAlreadyCompletedToday(completed);
+        // 🚨 [핵심] shouldSkipCheck 인자를 사용하여 완료 상태 확인을 건너뜁니다.
+        if (!shouldSkipCheck) {
+          const completed = await checkQuizCompletionStatus(QUIZ_ACTIVITY_TYPE);
+          setIsAlreadyCompletedToday(completed);
 
-        if (completed) {
-          console.log("오늘 단어 퀴즈를 이미 완료했습니다.");
-          setIsLoading(false);
-          return;
+          if (completed) {
+            setIsLoading(false);
+            return;
+          }
+        } else {
+          // 재시도 모드: 서버 체크를 건너뛰고 진행 UI를 강제합니다.
+          setIsAlreadyCompletedToday(false);
         }
 
-        // ⚠️ TODO: 백엔드 API 수정 필요 (QUIZ_LENGTH 만큼 문제 반환하도록)
-        const quizPromises = Array(QUIZ_LENGTH)
-          .fill(0)
-          .map(() => getMultipleChoiceQuiz());
-        const quizResults = await Promise.all(quizPromises);
-        const validQuizzes = quizResults.filter(
-          (q) => q !== null
-        ) as MultipleChoiceQuiz[];
+        // 퀴즈 로드 시작
+        const quizResults = await getMultipleChoiceQuizSet();
 
-        if (validQuizzes.length > 0) {
-          setQuizzes(validQuizzes);
+        if (quizResults && quizResults.length > 0) {
+          setQuizzes(quizResults);
           setCurrentQuestionIndex(0);
-          setQuizCompleted(false);
+          setQuizAttempts([]);
         } else {
-          // 퀴즈 문제 자체를 못 받아온 경우 (출제할 단어 부족 등)
           setError(
             "퀴즈를 생성할 수 없습니다. 학습할 단어가 부족하거나 모두 마스터했습니다."
           );
-          toast.info("퀴즈를 생성할 수 없습니다."); // 사용자에게도 알림
+          toast.info("퀴즈를 생성할 수 없습니다.");
         }
       } catch (err: any) {
         setError(err.message || "퀴즈 로딩 중 오류 발생");
@@ -95,31 +92,92 @@ export default function QuizPage() {
       } finally {
         setIsLoading(false);
       }
-    };
+    },
+    [user?.id]
+  );
 
-    // 사용자 확인 후 퀴즈 로드 시작
-    if (useAuthStore.persist.hasHydrated() && useAuthStore.getState().user) {
-      loadQuizData();
-    } else {
-      const unsubHydration = useAuthStore.persist.onFinishHydration(() => {
-        if (useAuthStore.getState().user) loadQuizData();
-        // 사용자가 여전히 없으면 로그인 페이지로 리디렉션 (이중 확인)
-        else if (
-          !useAuthStore.getState().user &&
-          useAuthStore.persist.hasHydrated()
-        ) {
-          router.push("/login");
-        }
-      });
-      return () => {
-        unsubAuth();
-        unsubHydration();
-      };
+  // --- 데이터 로딩 및 완료 상태 확인 ---
+  useEffect(() => {
+    const unsubAuth = useAuthStore.persist.onFinishHydration(() => {
+      if (!useAuthStore.getState().user) router.push("/login");
+    });
+    if (useAuthStore.persist.hasHydrated() && !useAuthStore.getState().user) {
+      router.push("/login");
     }
-    return () => unsubAuth();
-  }, [router]); // 최초 로드 시 한 번 실행
 
-  // --- 핸들러 함수들 (handlePlayAudio, handleOptionSelect) ---
+    const currentUserId = user?.id;
+
+    // 🚨 [최종 수정] window.location.search에서 'key' 파라미터 유무로 재시도 여부를 판단합니다.
+    let shouldSkipCheck = false;
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      // 'key' 파라미터가 존재하면 재시도 모드로 간주
+      if (urlParams.has("key")) {
+        shouldSkipCheck = true;
+      }
+    }
+
+    if (currentUserId) {
+      loadQuizData(shouldSkipCheck);
+    } else if (useAuthStore.persist.hasHydrated()) {
+      if (!useAuthStore.getState().user) router.push("/login");
+    }
+
+    return () => unsubAuth();
+  }, [router, user?.id, loadQuizData]); // 🚨 의존성 배열에서 isRetry 제거
+
+  // --- 🚀 퀴즈 완료 및 결과 제출 핸들러 ---
+  const handleQuizComplete = useCallback(
+    async (finalAttempts: QuizAttempt[]) => {
+      const currentUserId = user?.id;
+      if (!currentUserId) return;
+
+      setIsProcessingResults(true);
+      const correctCount = finalAttempts.filter((a) => a.is_correct).length;
+
+      // 1. 서버 제출용 상세 기록 (details) 리스트 생성
+      const submissionDetails: QuizAttemptDetailCreate[] = finalAttempts.map(
+        (attempt) => ({
+          question_word_id: attempt.question_word.id,
+          is_correct: attempt.is_correct,
+          user_answer: attempt.user_answer,
+          correct_answer: attempt.correct_answer,
+          quiz_type: "multiple_choice",
+        })
+      );
+
+      // 2. 최종 제출/Store 저장 객체 생성
+      const finalResults: QuizResultsSubmission = {
+        total_questions: finalAttempts.length,
+        correct_count: correctCount,
+        activity_type: QUIZ_ACTIVITY_TYPE,
+        attempts: finalAttempts, // 렌더링용 원본 attempts 저장
+        details: submissionDetails, // 서버 제출용 details 저장
+      };
+
+      // 3. 💾 Zustand Store에 결과 저장
+      setResults(finalResults);
+
+      try {
+        // 4. 🌐 백엔드 API 호출: 결과 제출 및 활동 완료 기록
+        await submitQuizResults(finalResults);
+
+        toast.success("퀴즈 완료! 결과를 확인합니다.");
+
+        // 5. ➡️ 결과 페이지로 이동
+        router.replace("/quiz/results");
+      } catch (error) {
+        console.error("🔴 퀴즈 결과 제출 실패:", error);
+        toast.error("결과 기록 중 오류 발생. 로컬 결과만 표시됩니다.");
+        router.replace("/quiz/results");
+      } finally {
+        setIsProcessingResults(false);
+      }
+    },
+    [user?.id, router, setResults]
+  );
+
+  // --- 핸들러 함수들 ---
   const currentQuiz = quizzes[currentQuestionIndex];
 
   const handlePlayAudio = () => {
@@ -136,7 +194,7 @@ export default function QuizPage() {
         const utterance = new SpeechSynthesisUtterance(textToSpeak);
         utterance.lang = "en-US";
         utterance.rate = 0.9;
-        // 목소리 설정 (선택 사항)
+
         const setVoice = () => {
           const voices = window.speechSynthesis.getVoices();
           const targetVoice = voices.find((v) =>
@@ -169,47 +227,51 @@ export default function QuizPage() {
   };
 
   const handleOptionSelect = (optionId: number) => {
-    if (selectedOptionId !== null || !currentQuiz) return;
+    if (selectedOptionId !== null || !currentQuiz || isProcessingResults)
+      return;
 
     setSelectedOptionId(optionId);
     const correct = optionId === currentQuiz.correct_option_id;
     setIsCorrect(correct);
 
+    const correctOption = currentQuiz.options.find(
+      (opt) => opt.id === currentQuiz.correct_option_id
+    );
+    const userOption = currentQuiz.options.find((opt) => opt.id === optionId);
+
+    // 퀴즈 시도 기록 객체 생성
+    const attempt: QuizAttempt = {
+      question_word: currentQuiz.question_word,
+      is_correct: correct,
+
+      user_answer: userOption?.text || "미선택",
+      correct_answer: correctOption?.text || "정답 정보 없음",
+      quiz_type: QUIZ_ACTIVITY_TYPE,
+
+      user_selected_option_id: optionId,
+      correct_option_id: currentQuiz.correct_option_id,
+    };
+
     if (correct) {
       toast.success("정답입니다! 🎉");
-      // TODO: 정답 처리 로직 (예: 점수 기록)
     } else {
       toast.error("오답입니다.");
-      // TODO: 오답 처리 로직 (예: 오답 노트 추가)
     }
 
-    // 잠시 후 다음 문제로 이동 또는 완료 처리
     setTimeout(() => {
       const nextIndex = currentQuestionIndex + 1;
+      const updatedAttempts = [...quizAttempts, attempt];
+      setQuizAttempts(updatedAttempts);
+
       if (nextIndex < quizzes.length) {
         setCurrentQuestionIndex(nextIndex);
         setSelectedOptionId(null);
         setIsCorrect(null);
       } else {
-        setQuizCompleted(true); // 퀴즈 완료 상태 변경
-        toast.info("✨ 모든 퀴즈를 완료했습니다!");
+        handleQuizComplete(updatedAttempts);
       }
     }, 1500);
   };
-
-  // --- 퀴즈 완료 시 API 호출 ---
-  useEffect(() => {
-    if (quizCompleted) {
-      markQuizCompleted("word_quiz") // activity_type 지정
-        .then((activityLog) => {
-          console.log("Quiz completion marked successfully:", activityLog);
-        })
-        .catch((err) => {
-          console.error("Failed to mark quiz completion:", err);
-          toast.error("퀴즈 완료 상태를 기록하는 데 실패했습니다.");
-        });
-    }
-  }, [quizCompleted]);
 
   // --- UI 렌더링 ---
   if (isLoading && isAlreadyCompletedToday === null) {
@@ -220,7 +282,15 @@ export default function QuizPage() {
     );
   }
 
-  if (isAlreadyCompletedToday === true) {
+  // 🚨 [최종 수정] URL에서 'key' 파라미터 존재 여부로 다시 풀기 상태를 확인합니다.
+  let isCurrentlyRetry = false;
+  if (typeof window !== "undefined") {
+    const urlParams = new URLSearchParams(window.location.search);
+    isCurrentlyRetry = urlParams.has("key");
+  }
+
+  // 퀴즈 완료 UI 표시 조건: 서버가 완료했다고 했고, 현재 세션이 재시도 모드가 아니면 표시
+  if (isAlreadyCompletedToday === true && !isCurrentlyRetry) {
     return (
       <div className="max-w-xl mx-auto p-6 text-center mt-8">
         <CheckSquare className="w-16 h-16 text-green-500 mx-auto mb-4" />
@@ -249,36 +319,23 @@ export default function QuizPage() {
       </div>
     );
 
-  if (quizCompleted) {
+  if (isProcessingResults) {
     return (
       <div className="max-w-xl mx-auto p-6 text-center mt-8">
-        <h2 className="text-2xl font-bold mb-4 text-green-600 dark:text-green-400">
-          퀴즈 완료!
+        <h2 className="text-2xl font-bold mb-4 text-violet-600 dark:text-violet-400 animate-pulse">
+          결과를 기록하고 있습니다...
         </h2>
         <p className="text-gray-700 dark:text-gray-300 mb-6">
-          수고하셨습니다. 모든 문제를 다 풀었습니다.
+          잠시만 기다려 주세요. 곧 결과 화면으로 이동합니다.
         </p>
-        <button
-          onClick={() => router.push("/dashboard")}
-          className="px-4 py-2 bg-violet-600 text-white rounded hover:bg-violet-700 transition" // 스타일 명시
-        >
-          대시보드로 돌아가기
-        </button>
       </div>
     );
   }
 
-  if (!currentQuiz && !isLoading)
-    return (
-      <div className="p-6 text-center text-gray-500 dark:text-gray-400">
-        퀴즈를 표시할 수 없습니다. (생성 실패 또는 데이터 없음)
-      </div>
-    );
-
   if (!currentQuiz)
     return (
       <div className="p-6 text-center text-red-500">
-        오류: 현재 퀴즈 문제를 찾을 수 없습니다.
+        오류: 퀴즈 문제를 찾을 수 없습니다. (데이터 부족)
       </div>
     );
 
@@ -286,7 +343,6 @@ export default function QuizPage() {
   return (
     <div className="max-w-xl mx-auto mt-8">
       {/* 진행 상황 표시 */}
-      {/* ✅ 대시보드로 돌아가기 링크 추가 */}
       <div className="mb-4">
         <Link
           href="/dashboard"
@@ -304,7 +360,7 @@ export default function QuizPage() {
         key={currentQuiz.question_word.id}
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }} // AnimatePresence와 함께 사용 시 유효
+        exit={{ opacity: 0, scale: 0.95 }}
         transition={{ duration: 0.3 }}
         className="p-6 bg-white dark:bg-gray-800 rounded-lg shadow text-gray-900 dark:text-gray-100"
       >
@@ -335,7 +391,7 @@ export default function QuizPage() {
             <motion.button
               key={option.id}
               onClick={() => handleOptionSelect(option.id)}
-              disabled={selectedOptionId !== null}
+              disabled={selectedOptionId !== null || isProcessingResults}
               className={`w-full p-3 text-left rounded-md border transition-all duration-300 text-gray-900 dark:text-gray-100 ${
                 selectedOptionId === null
                   ? "border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600" // 기본 상태

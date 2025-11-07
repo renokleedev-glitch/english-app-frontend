@@ -10,7 +10,10 @@ import {
   UserWordProgress,
   MultipleChoiceQuiz,
   TodayActivityStatus,
-} from "@/schemas"; // TodayActivityStatus 임포트 추가
+  OXQuiz,
+  QuizCreate,
+  QuizResultsSubmission, // 👈 이 타입을 추가해야 합니다.
+} from "@/schemas";
 
 /* =====================================================
 🧩 1. 안전한 BASE_URL 설정 (환경별)
@@ -163,6 +166,22 @@ export async function recordListenAction(
   }
 }
 
+// **
+//  * 🆕 [핵심 추가] 오늘의 단어 학습 (듣기 3회) 완료 상태를 서버에 기록
+//  * POST /api/words/study/complete 엔드포인트를 호출합니다.
+//  * @param userId - 완료 상태를 기록할 사용자 ID
+//  */
+export async function markStudyCompleted(userId: number): Promise<void> {
+  try {
+    // 백엔드에서 user_id를 body로 받도록 라우터를 설정했다고 가정합니다.
+    await api.post("/api/words/study/complete", { user_id: userId });
+    console.log("Word study completion logged successfully.");
+  } catch (e) {
+    console.error("Failed to log study completion:", e);
+    throw new Error(toErrorMessage(e));
+  }
+}
+
 // --- Quiz ---
 export async function getMultipleChoiceQuiz(): Promise<MultipleChoiceQuiz | null> {
   try {
@@ -178,6 +197,27 @@ export async function getMultipleChoiceQuiz(): Promise<MultipleChoiceQuiz | null
     return null;
   }
 }
+
+// 🆕 [핵심 추가 1] 객관식 퀴즈 세트(10문제) 가져오기
+export async function getMultipleChoiceQuizSet(): Promise<
+  MultipleChoiceQuiz[]
+> {
+  try {
+    const { data: quizSet } = await api.post<MultipleChoiceQuiz[]>(
+      "/api/quiz/multiple-choice-set", // 👈 /api/quiz 유지
+      null // Body 없음
+    );
+    return quizSet;
+  } catch (e) {
+    console.error(`Failed to fetch multiple choice quiz set:`, e);
+    // 404 에러 시 빈 배열 반환
+    if ((e as AxiosError).response?.status === 404) {
+      return [];
+    }
+    throw new Error(toErrorMessage(e));
+  }
+}
+
 export async function markQuizCompleted(
   activityType: string
 ): Promise<DailyActivityLog> {
@@ -209,5 +249,109 @@ export async function checkQuizCompletionStatus(
       return false;
     }
     return false;
+  }
+}
+
+// ✅ [핵심 추가] O/X 퀴즈 문제 가져오기 API 호출 함수
+export async function getOXQuiz(): Promise<OXQuiz | null> {
+  try {
+    const { data } = await api.get<OXQuiz>("/api/quiz/ox-test");
+    return data;
+  } catch (e) {
+    if ((e as AxiosError).response?.status !== 401) {
+      if ((e as AxiosError).response?.status === 404) {
+        // 퀴즈 생성할 단어가 없는 경우
+        return null;
+      }
+      throw new Error(toErrorMessage(e));
+    }
+    return null;
+  }
+}
+
+// 🆕 [핵심 추가 2] O/X 퀴즈 세트(10문제) 가져오기
+export async function getOXQuizSet(): Promise<OXQuiz[]> {
+  try {
+    const { data: quizSet } = await api.post<OXQuiz[]>(
+      "/api/quiz/ox-test-set",
+      null // 👈 Body를 null로 설정
+    );
+    return quizSet;
+  } catch (e) {
+    console.error(`Failed to fetch OX quiz set:`, e);
+    // 404 에러 시 빈 배열 반환
+    if ((e as AxiosError).response?.status === 404) {
+      return [];
+    }
+    throw new Error(toErrorMessage(e));
+  }
+}
+
+// 서버에서 가져올 오답 상세 기록의 타입 정의
+export type QuizAttemptDetail = {
+  id: number;
+  user_id: number;
+  question_word_id: number;
+  is_correct: boolean;
+  user_answer: string; // 사용자가 고른 뜻
+  correct_answer: string; // 정답 뜻
+  attempted_at: string;
+  quiz_type: "multiple_choice" | "ox";
+};
+
+/**
+ * 🆕 [수정] 퀴즈 결과를 서버에 제출하고 상세 기록 및 완료 상태를 기록
+ * POST /api/quiz/submit-details 엔드포인트를 호출합니다.
+ * @param results - QuizResultsSubmission 타입의 퀴즈 결과 객체 (details 포함)
+ */
+export async function submitQuizResults(
+  results: QuizResultsSubmission
+): Promise<void> {
+  try {
+    // ⚠️ 수정: 경로를 백엔드의 새로운 상세 기록 제출 엔드포인트로 변경하고,
+    // 퀴즈 결과 객체 전체 (상세 기록 details 포함)를 요청 본문으로 보냅니다.
+    await api.post("/api/quiz/submit-details", results);
+
+    console.log(
+      "Quiz results submitted and quiz completion logged successfully."
+    );
+  } catch (e) {
+    console.error("Failed to submit quiz results:", e);
+    throw new Error(toErrorMessage(e));
+  }
+}
+
+// 🆕 오답 상세 기록을 가져오는 새 API 함수
+// GET /api/quiz/wrong-answers 엔드포인트를 호출합니다.
+export async function getWrongQuizDetails(): Promise<QuizAttemptDetail[]> {
+  try {
+    const { data } = await api.get<QuizAttemptDetail[]>(
+      "/api/quiz/wrong-answers"
+    );
+    return data;
+  } catch (e) {
+    // 401 에러는 인터셉터에서 처리됨.
+    // 그 외 에러는 콘솔에 기록하고 빈 배열 반환 또는 에러 throw
+    if ((e as AxiosError).response?.status !== 401) {
+      console.error("Failed to fetch wrong quiz details:", e);
+      // 오답 기록이 없을 경우 백엔드에서 빈 배열을 반환해야 하지만,
+      // 클라이언트 측 방어를 위해 에러 시 빈 배열을 반환할 수 있습니다.
+      // 여기서는 명확한 에러 처리를 위해 throw를 유지합니다.
+      throw new Error(toErrorMessage(e));
+    }
+    return [];
+  }
+}
+export async function resetQuizCompletion(activityType: string): Promise<void> {
+  try {
+    // 🚨 [핵심 수정] 쿼리 파라미터를 params 객체에 넣어 전송합니다.
+    await api.delete(`/api/quiz/reset-completion`, {
+      params: { activity_type: activityType },
+    });
+
+    console.log(`${activityType} completion record deleted.`);
+  } catch (e) {
+    console.error(`Failed to reset completion status for ${activityType}:`, e);
+    throw new Error(toErrorMessage(e));
   }
 }
