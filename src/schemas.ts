@@ -89,8 +89,25 @@ export interface QuizAttempt {
   correct_option_id?: number;
 }
 
-// 🚨 QuizAttemptDetailCreate 타입이 위에 정의되어 있어야 합니다. (이전에 추가 완료)
-import { QuizAttemptDetailCreate } from "./schemas"; // 혹은 파일 내부에 정의되어 있다고 가정
+// // 🚨 QuizAttemptDetailCreate 타입이 위에 정의되어 있어야 합니다. (이전에 추가 완료)
+// import { QuizAttemptDetailCreate } from "./schemas"; // 혹은 파일 내부에 정의되어 있다고 가정
+
+// 1. 상세 기록 생성 기본 스키마 (QuizAttemptDetailCreate가 상속받는 기본 클래스)
+export interface QuizAttemptDetailBase {
+  // 🚨 export가 있어야 합니다.
+  question_word_id: number;
+  is_correct: boolean;
+  user_answer: string;
+  correct_answer: string;
+  quiz_type: string;
+}
+
+// 2. 퀴즈 상세 기록 생성 스키마
+export interface QuizAttemptDetailCreate extends QuizAttemptDetailBase {
+  // 🚨 export가 있어야 합니다.
+  // Base를 상속받거나, 직접 필드 정의
+  quiz_type: "multiple_choice" | "ox"; // Literal 타입 사용 시 재정의
+}
 
 /**
  * 퀴즈 결과 제출 시 사용할 전체 스키마 (백엔드 POST /api/quiz/submit-results용)
