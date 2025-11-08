@@ -4,7 +4,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
-import { getWrongQuizDetails, QuizAttemptDetail } from "@/lib/api"; // 🚨 새 API 함수 및 타입 임포트
+import { getWrongQuizDetails } from "@/lib/api"; // 👈 api.ts에서는 함수만 가져옴
+import { QuizAttemptDetail } from "@/schemas"; // 👈 타입은 schemas.ts에서 가져옴
 import Link from "next/link";
 import { ArrowLeft, BookOpen, Clock, Zap } from "lucide-react";
 import { toast } from "sonner";

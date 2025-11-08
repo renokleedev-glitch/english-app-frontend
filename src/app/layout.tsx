@@ -40,12 +40,12 @@ export default function RootLayout({
     const initial = theme || (prefersDark ? "dark" : "light");
     setTheme(initial);
     document.documentElement.classList.toggle("dark", initial === "dark");
-  }, [mounted]);
+  }, [mounted, theme, setTheme]); // 🚨 [핵심 추가] theme, setTheme
 
-  useEffect(() => {
-    if (!mounted) return;
-    document.documentElement.classList.toggle("dark", theme === "dark");
-  }, [mounted, theme]);
+  // useEffect(() => {
+  //   if (!mounted) return;
+  //   document.documentElement.classList.toggle("dark", theme === "dark");
+  // }, [mounted, theme]);
 
   return (
     // ✅ 동적 class 빼고, 경고 억제 플래그만
@@ -56,6 +56,7 @@ export default function RootLayout({
         {mounted && <Navbar />}
         {/* 🚨 [핵심 수정 2] min-h-screen을 main 태그로 이동하여 콘텐츠 높이를 확보합니다. */}
         <main className="px-6 py-4 mt-16 min-h-screen">{children}</main>
+        <Toaster position="top-right" richColors /> {/* 🚨 [핵심 추가] */}
       </body>
     </html>
   );

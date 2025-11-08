@@ -76,7 +76,8 @@ export interface OXQuiz {
 export interface TodayActivityStatus {
   word_study: boolean; // 오늘의 단어 학습 완료 여부
   word_quiz: boolean; // 단어 퀴즈 완료 여부
-  // grammar_quiz?: boolean; // 나중에 추가될 활동들
+
+  exam_quiz: boolean; // 내신 문제 완료 여부
 }
 
 export interface QuizAttempt {
@@ -138,4 +139,70 @@ export interface QuizAttempt {
   correct_option_id?: number;
   user_answer_ox?: boolean | null;
   correct_answer_ox?: boolean;
+}
+
+// --- 내신 문제 (ExamQuestion) 관련 타입 ---
+
+/**
+ * 🆕 객관식(MC) 문제의 선택지 (보기)
+ */
+export interface QuestionOption {
+  id: number;
+  text: string;
+}
+
+/**
+ * 🆕 API로부터 받아올 내신 문제(ExamQuestion)의 타입
+ */
+export interface ExamQuestion {
+  id: number;
+  grammar_point: string | null; // 👈 이름 변경
+  question_type: "MC" | "CORRECT" | "CONSTRUCT";
+  question_text: string;
+  explanation: string | null;
+
+  // 🚨 [핵심 추가] 정답 필드 추가
+  correct_answer: string;
+
+  // MC 유형일 때만 채워짐
+  choices: QuestionOption[] | null;
+
+  // 영작(CONSTRUCT) 유형일 때만 채워짐
+  scrambled_words: string[] | null;
+}
+
+/**
+ * 🆕 [내신 문제] 풀이 기록 '조회'용 스키마 (API 응답 모델)
+ * (UserGrammarAttempt 모델 대응)
+ */
+export interface UserGrammarAttempt extends GrammarAttemptCreate {
+  id: number;
+  user_id: number;
+  attempted_at: string; // 날짜/시간은 string으로 받습니다.
+
+  // 🚨 [핵심] JOIN된 'ExamQuestion' (문제) 정보를 포함합니다.
+  question: ExamQuestion;
+}
+
+/**
+ * 🆕 [내신 문제] 답안 제출용 스키마 (UserGrammarAttempt 모델 대응)
+ * (이 타입을 export 해야 exam/page.tsx에서 import하여 사용할 수 있습니다.)
+ */
+export interface GrammarAttemptCreate {
+  question_id: number;
+  user_answer: string;
+  is_correct: boolean;
+}
+
+/**
+ * 🆕 [단어 퀴즈] 오답 노트 '조회'용 스키마 (API 응답 모델)
+ * (QuizAttemptDetail 모델 대응)
+ */
+export interface QuizAttemptDetail extends QuizAttemptDetailBase {
+  id: number;
+  user_id: number;
+  attempted_at: string;
+
+  // 🚨 [핵심] JOIN된 'Word' (단어) 정보를 포함합니다.
+  question_word: Word;
 }
