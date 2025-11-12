@@ -60,9 +60,10 @@ export default function LoginPage() {
       // 3. 🚨 [핵심] 역할(Role)에 따라 리디렉션 경로를 분기합니다.
       if (user && (user.role === Role.ADMIN || user.role === Role.TEACHER)) {
         // 관리자 또는 선생님은 /admin으로 이동
+        console.log(`Attempting login for: ${email}`);
         router.push("/admin/users"); // (또는 /admin)
       } else {
-        // 학생은 /dashboard로 이동
+        // 학생은 /dashboard로 이동ㅎ
         router.push("/dashboard");
       }
     } catch (err: any) {
