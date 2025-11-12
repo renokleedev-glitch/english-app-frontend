@@ -15,12 +15,20 @@ export interface Word {
   example_sentence_korean?: string | null;
 }
 
-// 백엔드의 User 스키마에 대응하는 프론트엔드 타입
+// 역할(Role) Enum
+export enum Role {
+  STUDENT = "student",
+  TEACHER = "teacher",
+  ADMIN = "admin",
+}
+
+// User 인터페이스에 role 및 daily_exam_goal 추가
 export interface User {
   id: number;
   email: string;
   daily_word_goal: number;
-  // created_at 등 필요한 경우 추가
+  daily_exam_goal: number; // 👈 이 필드 추가
+  role: Role; // 👈 이 필드 추가
 }
 
 // --- 학습 진행도 관련 타입 ---
@@ -156,18 +164,15 @@ export interface QuestionOption {
  */
 export interface ExamQuestion {
   id: number;
-  grammar_point: string | null; // 👈 이름 변경
+  grammar_point: string | null;
   question_type: "MC" | "CORRECT" | "CONSTRUCT";
   question_text: string;
   explanation: string | null;
-
-  // 🚨 [핵심 추가] 정답 필드 추가
   correct_answer: string;
 
-  // MC 유형일 때만 채워짐
-  choices: QuestionOption[] | null;
+  grade_level: number; // 👈 [핵심 추가] 이 필드를 추가합니다.
 
-  // 영작(CONSTRUCT) 유형일 때만 채워짐
+  choices: QuestionOption[] | null;
   scrambled_words: string[] | null;
 }
 
@@ -205,4 +210,79 @@ export interface QuizAttemptDetail extends QuizAttemptDetailBase {
 
   // 🚨 [핵심] JOIN된 'Word' (단어) 정보를 포함합니다.
   question_word: Word;
+}
+
+// --- (어드민) 관련 스키마 ---
+
+// 학생 목표량 수정용
+export interface UserUpdateGoals {
+  daily_word_goal: number;
+  daily_exam_goal: number;
+}
+
+// 학생 역할 수정용
+export interface UserUpdateRole {
+  role: Role;
+}
+
+// 🆕 [핵심 추가] 단어 생성을 위한 타입 (seed.py와 호환)
+export interface WordCreate {
+  text: string;
+  meaning: string;
+  grade_level?: number | null;
+  pronunciation?: string | null;
+  english_audio_url?: string | null;
+  korean_audio_url?: string | null;
+  example_sentence_english?: string | null;
+  example_sentence_korean?: string | null;
+}
+
+// 🆕 [핵심 추가] 단어 수정을 위한 타입 (모든 필드 선택적)
+export interface WordUpdate {
+  text?: string;
+  meaning?: string;
+  grade_level?: number | null;
+  pronunciation?: string | null;
+  english_audio_url?: string | null;
+  korean_audio_url?: string | null;
+  example_sentence_english?: string | null;
+  example_sentence_korean?: string | null;
+}
+
+// (어드민) 내신 문제 관리 Schema
+export interface GrammarQuestionCreate {
+  grade_level: number;
+  grammar_point: string;
+  question_type: "MC" | "CORRECT" | "CONSTRUCT";
+  question_text: string;
+  choices: any | null; // JSON 필드는 any 또는 구체적인 타입
+  correct_answer: string;
+  explanation: string | null;
+  scrambled_words: string[] | null;
+}
+
+export interface GrammarQuestionUpdate {
+  grade_level?: number;
+  grammar_point?: string;
+  question_type?: "MC" | "CORRECT" | "CONSTRUCT";
+  question_text?: string;
+  choices?: any | null;
+  correct_answer?: string;
+  explanation?: string | null;
+  scrambled_words?: string[] | null;
+}
+
+// --- (어드민) 단어-문제 연결 Schema ---
+
+// 🆕 [핵심 추가] 단어와 내신 문제를 연결하기 위한 스키마
+export interface WordQuestionLinkCreate {
+  grammar_question_id: number;
+  word_id: number;
+}
+
+// 🆕 [핵심 추가] 단어-문제 연결 '조회'용 스키마 (API 응답)
+// (Word 및 ExamQuestion 타입이 이 파일 위에 이미 정의되어 있어야 함)
+export interface WordQuestionLink extends WordQuestionLinkCreate {
+  word: Word;
+  question: ExamQuestion;
 }

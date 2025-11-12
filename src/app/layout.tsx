@@ -8,6 +8,7 @@ import { useThemeStore } from "@/store/themeStore";
 import { useAuthStore } from "@/store/authStore";
 import { getToken } from "@/lib/token";
 import { Toaster } from "sonner";
+import { usePathname } from "next/navigation"; // 🚨 [핵심 추가] 1. usePathname 임포트
 
 export default function RootLayout({
   children,
@@ -17,6 +18,9 @@ export default function RootLayout({
   const fetchUser = useAuthStore((s) => s.fetchUser);
   const { theme, setTheme } = useThemeStore();
   const [mounted, setMounted] = useState(false);
+
+  const pathname = usePathname(); // 🚨 [핵심 추가] 2. 현재 경로 확인
+  const isAdminPage = pathname.startsWith("/admin"); // 🚨 /admin 경로 여부
 
   useEffect(() => {
     setMounted(true);
@@ -48,15 +52,19 @@ export default function RootLayout({
   // }, [mounted, theme]);
 
   return (
-    // ✅ 동적 class 빼고, 경고 억제 플래그만
     <html lang="ko" suppressHydrationWarning>
-      {/* 🚨 [핵심 수정 1] body에서 min-h-screen을 제거하고, 
-             Tailwind 색상 클래스를 유지하여 CSS 변수가 작동하도록 합니다. */}
       <body className="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors">
-        {mounted && <Navbar />}
-        {/* 🚨 [핵심 수정 2] min-h-screen을 main 태그로 이동하여 콘텐츠 높이를 확보합니다. */}
-        <main className="px-6 py-4 mt-16 min-h-screen">{children}</main>
-        <Toaster position="top-right" richColors /> {/* 🚨 [핵심 추가] */}
+        {/* 🚨 [핵심 수정] 3. admin 페이지가 아닐 때만 상단 Navbar 렌더링 */}
+        {mounted && !isAdminPage && <Navbar />}
+
+        {/* 🚨 [핵심 수정] 4. admin 페이지가 아닐 때만 상단 여백(mt-16) 적용 */}
+        <main
+          className={`px-6 py-4 min-h-screen ${!isAdminPage ? "mt-16" : ""}`}
+        >
+          {children}
+        </main>
+
+        <Toaster position="top-right" richColors />
       </body>
     </html>
   );
