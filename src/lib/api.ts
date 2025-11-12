@@ -63,6 +63,7 @@ export const api = axios.create({
 api.interceptors.request.use((config) => {
   const token = getToken();
   if (token) {
+    console.log("22222 Using API Base URL:", BASE_URL);
     config.headers = config.headers ?? {};
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -111,6 +112,7 @@ export async function loginUser(
     const { data } = await api.post("/api/login/token", params, {
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
     });
+    console.log(data);
     return data;
   } catch (e) {
     throw new Error(toErrorMessage(e));
@@ -119,6 +121,7 @@ export async function loginUser(
 export async function getMe(): Promise<User | null> {
   try {
     const { data } = await api.get("/api/users/me");
+    console.log(data);
     return data;
   } catch (e) {
     if ((e as AxiosError).response?.status !== 401) {
