@@ -38,6 +38,7 @@ if (process.env.NODE_ENV === "production") {
   if (!BASE_URL) {
     console.error("❌ Missing NEXT_PUBLIC_BACKEND_URL in Production!");
   }
+  BASE_URL = "https://english-app-backend-production-caa7.up.railway.app";
 } else {
   // 로컬 개발 환경 기본값 (http 사용)
   BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
