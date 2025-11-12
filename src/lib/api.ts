@@ -31,19 +31,22 @@ import { toast } from "sonner";
 /* =====================================================
 🧩 1. 안전한 BASE_URL 설정 (환경별)
 ===================================================== */
-let BASE_URL: string;
+let BASE_URL =
+  process.env.NEXT_PUBLIC_BACKEND_URL_V2 ||
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  "";
 
-if (process.env.NODE_ENV === "production") {
-  BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL_V2 ?? "";
-  if (!BASE_URL) {
-    console.error("❌ Missing NEXT_PUBLIC_BACKEND_URL in Production!");
-  }
-  BASE_URL = "https://english-app-backend-production-caa7.up.railway.app";
-} else {
-  // 로컬 개발 환경 기본값 (http 사용)
-  BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+if (!BASE_URL) {
+  // 환경변수 없을 때 fallback
+  BASE_URL =
+    process.env.NODE_ENV === "production"
+      ? "https://english-app-backend-production-caa7.up.railway.app"
+      : "http://localhost:8000";
 }
+
+// 항상 슬래시 제거
 BASE_URL = BASE_URL.replace(/\/$/, "");
+
 console.log("🌍 Using API Base URL:", BASE_URL);
 
 /* =====================================================
