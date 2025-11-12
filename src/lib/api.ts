@@ -34,7 +34,7 @@ import { toast } from "sonner";
 let BASE_URL: string;
 
 if (process.env.NODE_ENV === "production") {
-  BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? "";
+  BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL_V2 ?? "";
   if (!BASE_URL) {
     console.error("❌ Missing NEXT_PUBLIC_BACKEND_URL in Production!");
   }
