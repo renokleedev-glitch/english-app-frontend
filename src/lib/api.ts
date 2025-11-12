@@ -420,7 +420,7 @@ export async function adminGetWords(): Promise<Word[]> {
     throw new Error(toErrorMessage(e));
   }
 }
-
+// ,,
 /**
  * (어드민) 새 단어를 생성합니다.
  * (POST /api/admin/words)
