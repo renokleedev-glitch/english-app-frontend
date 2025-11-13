@@ -360,234 +360,117 @@ export async function getTodayExamAttempts(): Promise<UserGrammarAttempt[]> {
 
 // --- 💎 어드민 API (Admin) ---
 
-/**
- * (어드민) 모든 학생 목록을 조회합니다.
- * (GET /api/admin/users)
- */
+/** (어드민) 모든 학생 목록 조회 */
 export async function adminGetUsers(): Promise<User[]> {
-  try {
-    const { data } = await api.get<User[]>("/api/admin/users");
-    return data;
-  } catch (e) {
-    console.error("Failed to fetch users:", e);
-    throw new Error(toErrorMessage(e));
-  }
+  const { data } = await api.get<User[]>("/api/admin/users/");
+  return data;
 }
 
-/**
- * (어드민) 특정 학생의 학습 목표량을 수정합니다.
- * (PUT /api/admin/users/{user_id}/goals)
- */
+/** (어드민) 학생 목표량 수정 */
 export async function adminUpdateUserGoals(
   userId: number,
   goals: UserUpdateGoals
 ): Promise<User> {
-  try {
-    const { data } = await api.put<User>(
-      `/api/admin/users/${userId}/goals`,
-      goals
-    );
-    return data;
-  } catch (e) {
-    console.error(`Failed to update goals for user ${userId}:`, e);
-    throw new Error(toErrorMessage(e));
-  }
+  const { data } = await api.put<User>(
+    `/api/admin/users/${userId}/goals/`,
+    goals
+  );
+  return data;
 }
 
-/**
- * (어드민) 특정 학생의 역할을 수정합니다.
- * (PUT /api/admin/users/{user_id}/role)
- */
+/** (어드민) 학생 역할 수정 */
 export async function adminUpdateUserRole(
   userId: number,
   role: Role
 ): Promise<User> {
-  try {
-    const { data } = await api.put<User>(
-      `/api/admin/users/${userId}/role`,
-      { role: role } // 👈 UserUpdateRole 스키마에 맞게 객체로 전송
-    );
-    return data;
-  } catch (e) {
-    console.error(`Failed to update role for user ${userId}:`, e);
-    throw new Error(toErrorMessage(e));
-  }
+  const { data } = await api.put<User>(`/api/admin/users/${userId}/role/`, {
+    role,
+  });
+  return data;
 }
 
-/**
- * (어드민) 모든 단어 목록을 조회합니다.
- * (GET /api/admin/words)
- */
+/** (어드민) 모든 단어 목록 */
 export async function adminGetWords(): Promise<Word[]> {
-  try {
-    const { data } = await api.get<Word[]>("/api/admin/words");
-    return data;
-  } catch (e) {
-    console.error("Failed to fetch words:", e);
-    throw new Error(toErrorMessage(e));
-  }
-}
-// ,,
-/**
- * (어드민) 새 단어를 생성합니다.
- * (POST /api/admin/words)
- */
-export async function adminCreateWord(wordData: WordCreate): Promise<Word> {
-  try {
-    const { data } = await api.post<Word>("/api/admin/words", wordData);
-    return data;
-  } catch (e) {
-    console.error("Failed to create word:", e);
-    throw new Error(toErrorMessage(e));
-  }
+  const { data } = await api.get<Word[]>("/api/admin/words/");
+  return data;
 }
 
-/**
- * (어드민) 특정 단어를 수정합니다.
- * (PUT /api/admin/words/{word_id})
- */
+/** (어드민) 새 단어 생성 */
+export async function adminCreateWord(wordData: WordCreate): Promise<Word> {
+  const { data } = await api.post<Word>("/api/admin/words/", wordData);
+  return data;
+}
+
+/** (어드민) 단어 수정 */
 export async function adminUpdateWord(
   wordId: number,
   wordData: WordUpdate
 ): Promise<Word> {
-  try {
-    const { data } = await api.put<Word>(
-      `/api/admin/words/${wordId}`,
-      wordData
-    );
-    return data;
-  } catch (e) {
-    console.error(`Failed to update word ${wordId}:`, e);
-    throw new Error(toErrorMessage(e));
-  }
+  const { data } = await api.put<Word>(`/api/admin/words/${wordId}/`, wordData);
+  return data;
 }
 
-/**
- * (어드민) 특정 단어를 삭제합니다.
- * (DELETE /api/admin/words/{word_id})
- */
+/** (어드민) 단어 삭제 */
 export async function adminDeleteWord(wordId: number): Promise<void> {
-  try {
-    await api.delete(`/api/admin/words/${wordId}`);
-  } catch (e) {
-    console.error(`Failed to delete word ${wordId}:`, e);
-    throw new Error(toErrorMessage(e));
-  }
+  await api.delete(`/api/admin/words/${wordId}/`);
 }
 
-/**
- * (어드민) 모든 내신 문제 목록을 조회합니다.
- * (GET /api/admin/exam)
- */
+/** (어드민) 내신 문제 목록 */
 export async function adminGetExamQuestions(): Promise<ExamQuestion[]> {
-  try {
-    const { data } = await api.get<ExamQuestion[]>("/api/admin/exam");
-    return data;
-  } catch (e) {
-    console.error("Failed to fetch exam questions:", e);
-    throw new Error(toErrorMessage(e));
-  }
+  const { data } = await api.get<ExamQuestion[]>("/api/admin/exam/");
+  return data;
 }
 
-/**
- * (어드민) 새 내신 문제를 생성합니다.
- * (POST /api/admin/exam)
- */
+/** (어드민) 새 내신 문제 생성 */
 export async function adminCreateExamQuestion(
   questionData: GrammarQuestionCreate
 ): Promise<ExamQuestion> {
-  try {
-    const { data } = await api.post<ExamQuestion>(
-      "/api/admin/exam",
-      questionData
-    );
-    return data;
-  } catch (e) {
-    console.error("Failed to create exam question:", e);
-    throw new Error(toErrorMessage(e));
-  }
+  const { data } = await api.post<ExamQuestion>(
+    "/api/admin/exam/",
+    questionData
+  );
+  return data;
 }
 
-/**
- * (어드민) 특정 내신 문제를 수정합니다.
- * (PUT /api/admin/exam/{question_id})
- */
+/** (어드민) 내신 문제 수정 */
 export async function adminUpdateExamQuestion(
   questionId: number,
   questionData: GrammarQuestionUpdate
 ): Promise<ExamQuestion> {
-  try {
-    const { data } = await api.put<ExamQuestion>(
-      `/api/admin/exam/${questionId}`,
-      questionData
-    );
-    return data;
-  } catch (e) {
-    console.error(`Failed to update exam question ${questionId}:`, e);
-    throw new Error(toErrorMessage(e));
-  }
+  const { data } = await api.put<ExamQuestion>(
+    `/api/admin/exam/${questionId}/`,
+    questionData
+  );
+  return data;
 }
 
-/**
- * (어드민) 특정 내신 문제를 삭제합니다.
- * (DELETE /api/admin/exam/{question_id})
- */
+/** (어드민) 내신 문제 삭제 */
 export async function adminDeleteExamQuestion(
   questionId: number
 ): Promise<void> {
-  try {
-    await api.delete(`/api/admin/exam/${questionId}`);
-  } catch (e) {
-    console.error(`Failed to delete exam question ${questionId}:`, e);
-    throw new Error(toErrorMessage(e));
-  }
+  await api.delete(`/api/admin/exam/${questionId}/`);
 }
 
-/**
- * (어드민) 모든 '단어-문제' 연결 목록을 조회합니다.
- * (GET /api/admin/links)
- */
+/** (어드민) 단어-문제 연결 목록 */
 export async function adminGetWordQuestionLinks(): Promise<WordQuestionLink[]> {
-  try {
-    const { data } = await api.get<WordQuestionLink[]>("/api/admin/links");
-    return data;
-  } catch (e) {
-    console.error("Failed to fetch word-question links:", e);
-    throw new Error(toErrorMessage(e));
-  }
+  const { data } = await api.get<WordQuestionLink[]>("/api/admin/links/");
+  return data;
 }
 
-/**
- * (어드민) 단어와 내신 문제를 연결합니다.
- * (POST /api/admin/links)
- */
+/** (어드민) 단어-문제 연결 생성 */
 export async function adminCreateWordQuestionLink(
   linkData: WordQuestionLinkCreate
 ): Promise<WordQuestionLinkCreate> {
-  try {
-    const { data } = await api.post<WordQuestionLinkCreate>(
-      "/api/admin/links",
-      linkData
-    );
-    return data;
-  } catch (e) {
-    console.error("Failed to create word-question link:", e);
-    throw new Error(toErrorMessage(e));
-  }
+  const { data } = await api.post<WordQuestionLinkCreate>(
+    "/api/admin/links/",
+    linkData
+  );
+  return data;
 }
 
-/**
- * (어드민) 단어와 내신 문제 연결을 해제합니다.
- * (DELETE /api/admin/links)
- */
+/** (어드민) 단어-문제 연결 삭제 */
 export async function adminDeleteWordQuestionLink(
   linkData: WordQuestionLinkCreate
 ): Promise<void> {
-  try {
-    // 🚨 DELETE 요청은 Body 대신 data 속성에 payload를 넣습니다 (Axios config)
-    await api.delete("/api/admin/links", { data: linkData });
-  } catch (e) {
-    console.error("Failed to delete word-question link:", e);
-    throw new Error(toErrorMessage(e));
-  }
+  await api.delete("/api/admin/links/", { data: linkData });
 }
