@@ -1,13 +1,15 @@
 // src/app/admin/words/page.tsx
 "use client";
 
-import { useState, useEffect, FormEvent } from "react";
+import { useState, useEffect, FormEvent, ChangeEvent } from "react"; // 🚨 ChangeEvent 추가
 import { Word, WordCreate, WordUpdate } from "@/schemas";
 import {
   adminGetWords,
   adminCreateWord,
   adminUpdateWord,
   adminDeleteWord,
+  adminGetWordTemplate, // 🚨 [신규]
+  adminBulkUploadWords, // 🚨 [신규]
 } from "@/lib/api";
 import { toast } from "sonner";
 import {
@@ -18,6 +20,8 @@ import {
   Trash2,
   X,
   BookText,
+  Download,
+  Upload,
 } from "lucide-react";
 
 // ------------------------------------------------------------------
@@ -203,6 +207,9 @@ export default function AdminWordsPage() {
   const [editingWord, setEditingWord] = useState<Word | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
+  // 🚨 [신규] 파일 업로드 로딩 상태
+  const [isUploading, setIsUploading] = useState(false);
+
   // --- 데이터 로딩 ---
   const fetchWords = async () => {
     setIsLoading(true);
@@ -252,6 +259,55 @@ export default function AdminWordsPage() {
     fetchWords(); // 저장 완료 시 목록 새로고침
   };
 
+  // 🚨 [신규] 템플릿 다운로드 핸들러
+  const handleDownloadTemplate = async () => {
+    toast.loading("템플릿 다운로드 중...");
+    try {
+      const blob = await adminGetWordTemplate();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "word_template.csv";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.dismiss();
+      toast.success("템플릿이 다운로드되었습니다.");
+    } catch (e: any) {
+      toast.dismiss();
+      toast.error(`다운로드 실패: ${e.message}`);
+    }
+  };
+
+  // 🚨 [신규] 파일 업로드 핸들러
+  const handleFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== "text/csv") {
+      toast.error("CSV 파일만 업로드할 수 있습니다.");
+      return;
+    }
+
+    setIsUploading(true);
+    toast.loading("CSV 파일을 업로드하고 데이터를 처리 중입니다...");
+
+    try {
+      const result = await adminBulkUploadWords(file);
+      toast.dismiss();
+      toast.success(result.detail || "업로드 성공!");
+      fetchWords(); // 목록 새로고침
+    } catch (e: any) {
+      toast.dismiss();
+      toast.error(`업로드 실패: ${e.message}`);
+    } finally {
+      setIsUploading(false);
+      // input 값을 초기화하여 동일한 파일을 다시 업로드할 수 있게 함
+      event.target.value = "";
+    }
+  };
+
   // --- UI 렌더링 ---
   if (isLoading) {
     return (
@@ -286,12 +342,40 @@ export default function AdminWordsPage() {
           <BookText className="mr-3" />
           단어 관리
         </h1>
-        <button
-          onClick={() => setIsCreateModalOpen(true)}
-          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 flex items-center"
-        >
-          <Plus size={18} className="mr-1" /> 새 단어 추가
-        </button>
+        {/* 🚨 [수정] 버튼 그룹으로 변경 */}
+        <div className="flex space-x-2">
+          <button
+            onClick={handleDownloadTemplate}
+            className="px-3 py-2 text-sm font-medium bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center"
+          >
+            <Download size={16} className="mr-1" /> 템플릿
+          </button>
+
+          {/* 파일 업로드 버튼 (input을 label로 감싸기) */}
+          <label
+            className={`
+            px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 flex items-center cursor-pointer
+            ${isUploading ? "opacity-50 cursor-not-allowed" : ""}
+          `}
+          >
+            <Upload size={16} className="mr-1" />
+            {isUploading ? "업로드 중..." : "벌크 업로드"}
+            <input
+              type="file"
+              accept=".csv"
+              className="hidden" // 👈 input 자체는 숨김
+              disabled={isUploading}
+              onChange={handleFileUpload}
+            />
+          </label>
+
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 flex items-center"
+          >
+            <Plus size={18} className="mr-1" /> 새 단어 추가
+          </button>
+        </div>
       </div>
 
       {/* 단어 목록 테이블 */}

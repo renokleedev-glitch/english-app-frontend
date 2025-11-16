@@ -474,3 +474,60 @@ export async function adminDeleteWordQuestionLink(
 ): Promise<void> {
   await api.delete("/api/admin/links/", { data: linkData });
 }
+
+/**
+ * (어드민) 단어 벌크 임포트용 CSV 템플릿을 다운로드합니다.
+ * (GET /api/admin/words/template)
+ */
+export async function adminGetWordTemplate(): Promise<Blob> {
+  try {
+    const { data } = await api.get("/api/admin/words/template", {
+      responseType: "blob", // 👈 [핵심] 응답을 Blob(파일)으로 받음
+    });
+    return data;
+  } catch (e) {
+    console.error("Failed to download word template:", e);
+    throw new Error(toErrorMessage(e));
+  }
+}
+
+/**
+ * (어드민) CSV 파일을 업로드하여 단어를 대량 생성합니다.
+ * (POST /api/admin/words/bulk-upload)
+ */
+// export async function adminBulkUploadWords(file: File): Promise<any> {
+//   try {
+//     const formData = new FormData();
+//     formData.append("file", file); // 👈 백엔드 API의 file 파라미터 이름과 일치
+
+//     const { data } = await api.post("/api/admin/words/bulk-upload", formData, {
+//       headers: {
+//         // 🚨 [핵심] 파일 업로드는 'multipart/form-data'로 설정
+//         "Content-Type": "multipart/form-data",
+//       },
+//     });
+//     return data;
+//   } catch (e) {
+//     console.error("Failed to bulk upload words:", e);
+//     throw new Error(toErrorMessage(e));
+//   }
+// }
+
+export async function adminBulkUploadWords(file: File): Promise<any> {
+  try {
+    const formData = new FormData();
+    formData.append("file", file); // 👈 백엔드 API의 file 파라미터 이름과 일치
+
+    const { data } = await api.post("/api/admin/words/bulk-upload", formData, {
+      // 🚨 [핵심 수정] 글로벌 헤더(application/json)를 덮어쓰고
+      // Axios가 FormData를 자동 감지하도록 Content-Type을 undefined로 설정합니다.
+      headers: {
+        "Content-Type": undefined,
+      },
+    });
+    return data;
+  } catch (e) {
+    console.error("Failed to bulk upload words:", e);
+    throw new Error(toErrorMessage(e));
+  }
+}
