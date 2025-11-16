@@ -6,12 +6,12 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { logout } from "@/lib/auth";
 import { useAuthStore } from "@/store/authStore";
+import { useThemeStore } from "@/store/themeStore"; // 🚨 [핵심 추가] 1. Theme Store 임포트
 import { Role } from "@/schemas";
 import {
   Users,
   BookText,
   FileText,
-  CheckSquare,
   Settings,
   Menu,
   X,
@@ -19,17 +19,18 @@ import {
   LayoutDashboard,
   Loader2,
   UserCheck,
+  Sun, // 🚨 [핵심 추가] 2. Sun/Moon 아이콘
+  Moon,
 } from "lucide-react";
 import { toast } from "sonner";
 
 // ------------------------------------------------------------------
-// 🚨 [핵심 수정] adminNavLinks 정의를 파일 최상단으로 이동
+// 어드민 사이드바 네비게이션 링크
 // ------------------------------------------------------------------
 const adminNavLinks = [
   { href: "/admin/users", label: "학생 관리", icon: Users },
   { href: "/admin/words", label: "단어 관리", icon: BookText },
   { href: "/admin/exam", label: "내신 문제 관리", icon: FileText },
-  { href: "/admin/links", label: "단어-문제 연결", icon: CheckSquare },
 ];
 
 /**
@@ -58,11 +59,12 @@ function NavLink({ href, children }: { href: string; children: ReactNode }) {
 }
 
 /**
- * 사이드바 콘텐츠 컴포넌트
+ * 🚨 [수정] 사이드바 콘텐츠 컴포넌트
  */
 function SidebarContent() {
   const router = useRouter();
-  const user = useAuthStore((state) => state.user); // 🚨 무한 루프 방지 (개별 선택)
+  const user = useAuthStore((state) => state.user);
+  const { theme, toggleTheme } = useThemeStore(); // 🚨 [핵심 추가] 3. Theme Store 사용
 
   const handleLogout = () => {
     logout();
@@ -72,6 +74,7 @@ function SidebarContent() {
   return (
     <div className="flex flex-col justify-between h-full">
       <div>
+        {/* ... (관리자 메뉴, 역할 표시, 네비게이션 링크 유지) ... */}
         <h2 className="text-xl font-semibold mb-1 text-gray-800 dark:text-gray-100">
           <Settings className="inline-block w-5 h-5 mr-2" />
           관리자 메뉴
@@ -81,7 +84,6 @@ function SidebarContent() {
         </span>
 
         <nav className="space-y-2 mt-4">
-          {/* ✅ 이제 adminNavLinks에 접근 가능 */}
           {adminNavLinks.map((link) => (
             <NavLink key={link.href} href={link.href}>
               <link.icon className="w-4 h-4 mr-3" />
@@ -92,7 +94,7 @@ function SidebarContent() {
           {user?.role === Role.ADMIN && (
             <NavLink href="/admin/roles">
               <UserCheck className="w-4 h-4 mr-3" />
-              (어드민) 역할 관리
+              권한 관리
             </NavLink>
           )}
         </nav>
@@ -104,6 +106,21 @@ function SidebarContent() {
           <LayoutDashboard className="w-4 h-4 mr-3" />
           메인 사이트
         </NavLink>
+
+        {/* 🚨 [핵심 추가] 4. 다크 모드 토글 버튼 */}
+        <button
+          onClick={toggleTheme}
+          className="flex items-center px-3 py-2 rounded-md text-sm font-medium w-full
+                     text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+        >
+          {theme === "light" ? (
+            <Moon className="w-4 h-4 mr-3" />
+          ) : (
+            <Sun className="w-4 h-4 mr-3" />
+          )}
+          {theme === "light" ? "다크 모드" : "라이트 모드"}
+        </button>
+
         <button
           onClick={handleLogout}
           className="flex items-center px-3 py-2 rounded-md text-sm font-medium w-full
@@ -123,10 +140,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const router = useRouter();
 
-  // 🚨 [핵심 수정] 무한 루프를 피하기 위해 state를 개별적으로 선택합니다.
   const user = useAuthStore((state) => state.user);
   const hydrated = useAuthStore((state) => state.hydrated);
-
   const [isAuthorized, setIsAuthorized] = useState(false);
 
   // 권한 확인 로직

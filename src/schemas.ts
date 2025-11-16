@@ -286,3 +286,9 @@ export interface WordQuestionLink extends WordQuestionLinkCreate {
   word: Word;
   question: ExamQuestion;
 }
+
+// --- 🆕 (사용자) 프로필 수정 Schema ---
+export interface UserUpdateProfile {
+  nickname?: string; // 닉네임 (선택적)
+  password?: string; // 새 비밀번호 (선택적)
+}

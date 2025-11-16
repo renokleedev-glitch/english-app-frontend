@@ -25,6 +25,7 @@ import {
   WordUpdate,
   UserUpdateGoals,
   WordCreate,
+  UserUpdateProfile,
 } from "@/schemas";
 import { toast } from "sonner";
 
@@ -46,6 +47,24 @@ if (!BASE_URL) {
 
 // 항상 슬래시 제거
 BASE_URL = BASE_URL.replace(/\/$/, "");
+
+// 페이지네이션 응답을 위한 타입 (schemas.ts와 일치)
+export interface PaginatedUsers {
+  total_count: number;
+  users: User[];
+}
+
+// 페이지네이션 응답을 위한 타입
+export interface PaginatedWords {
+  total_count: number;
+  words: Word[];
+}
+
+// 페이지네이션 응답을 위한 타입
+export interface PaginatedExamQuestions {
+  total_count: number;
+  questions: ExamQuestion[];
+}
 
 console.log("🌍 Using API Base URL:", BASE_URL);
 
@@ -90,17 +109,25 @@ api.interceptors.response.use(
 ===================================================== */
 
 // --- Auth ---
+
 export async function registerUser(
   email: string,
-  password: string
+  password: string,
+  nickname: string // 👈 [핵심 추가]
 ): Promise<User> {
   try {
-    const { data } = await api.post("/api/users/", { email, password });
+    // 👈 [핵심 수정] nickname을 API Body에 포함
+    const { data } = await api.post("/api/users/", {
+      email,
+      password,
+      nickname,
+    });
     return data;
   } catch (e) {
     throw new Error(toErrorMessage(e));
   }
 }
+
 export async function loginUser(
   email: string,
   password: string
@@ -360,10 +387,44 @@ export async function getTodayExamAttempts(): Promise<UserGrammarAttempt[]> {
 
 // --- 💎 어드민 API (Admin) ---
 
-/** (어드민) 모든 학생 목록 조회 */
-export async function adminGetUsers(): Promise<User[]> {
-  const { data } = await api.get<User[]>("/api/admin/users/");
-  return data;
+// src/lib/api.ts (adminGetUsers 함수 수정)
+
+/**
+ * (어드민) 사용자 목록을 페이지네이션 및 검색어로 조회합니다.
+ * (GET /api/admin/users)
+ * @param page 현재 페이지
+ * @param limit 페이지 당 개수
+ * @param search 검색어
+ * @param role (선택) 필터링할 역할
+ */
+export async function adminGetUsers(
+  page: number = 1,
+  limit: number = 10,
+  search: string = "",
+  role?: Role // 👈 [수정] role을 선택적(optional) 맨 뒤 파라미터로 변경
+): Promise<PaginatedUsers> {
+  // 👈 [수정] 반환 타입 PaginatedUsers
+  try {
+    const params: any = {
+      // 👈 [수정] params 객체 생성
+      skip: (page - 1) * limit,
+      limit: limit,
+      search: search,
+    };
+
+    // 👈 role이 전달된 경우에만 params에 추가
+    if (role) {
+      params.role = role;
+    }
+
+    const { data } = await api.get<PaginatedUsers>("/api/admin/users", {
+      params,
+    });
+    return data;
+  } catch (e) {
+    console.error("Failed to fetch users:", e);
+    throw new Error(toErrorMessage(e));
+  }
 }
 
 /** (어드민) 학생 목표량 수정 */
@@ -389,10 +450,31 @@ export async function adminUpdateUserRole(
   return data;
 }
 
-/** (어드민) 모든 단어 목록 */
-export async function adminGetWords(): Promise<Word[]> {
-  const { data } = await api.get<Word[]>("/api/admin/words/");
-  return data;
+/**
+ * (어드민) 모든 단어 목록을 페이지네이션 및 검색어로 조회합니다.
+ * (GET /api/admin/words)
+ */
+export async function adminGetWords(
+  page: number = 1,
+  limit: number = 10,
+  search: string = ""
+): Promise<PaginatedWords> {
+  // 👈 [수정] 반환 타입 변경
+  try {
+    const params = {
+      skip: (page - 1) * limit,
+      limit: limit,
+      search: search,
+    };
+
+    const { data } = await api.get<PaginatedWords>("/api/admin/words", {
+      params,
+    });
+    return data;
+  } catch (e) {
+    console.error("Failed to fetch words:", e);
+    throw new Error(toErrorMessage(e));
+  }
 }
 
 /** (어드민) 새 단어 생성 */
@@ -415,12 +497,32 @@ export async function adminDeleteWord(wordId: number): Promise<void> {
   await api.delete(`/api/admin/words/${wordId}/`);
 }
 
-/** (어드민) 내신 문제 목록 */
-export async function adminGetExamQuestions(): Promise<ExamQuestion[]> {
-  const { data } = await api.get<ExamQuestion[]>("/api/admin/exam/");
-  return data;
-}
+/**
+ * (어드민) 모든 내신 문제 목록을 페이지네이션 및 검색어로 조회합니다.
+ * (GET /api/admin/exam)
+ */
+export async function adminGetExamQuestions(
+  page: number = 1,
+  limit: number = 10,
+  search: string = ""
+): Promise<PaginatedExamQuestions> {
+  // 👈 [수정] 반환 타입 변경
+  try {
+    const params = {
+      skip: (page - 1) * limit,
+      limit: limit,
+      search: search,
+    };
 
+    const { data } = await api.get<PaginatedExamQuestions>("/api/admin/exam", {
+      params,
+    });
+    return data;
+  } catch (e) {
+    console.error("Failed to fetch exam questions:", e);
+    throw new Error(toErrorMessage(e));
+  }
+}
 /** (어드민) 새 내신 문제 생성 */
 export async function adminCreateExamQuestion(
   questionData: GrammarQuestionCreate
@@ -449,30 +551,6 @@ export async function adminDeleteExamQuestion(
   questionId: number
 ): Promise<void> {
   await api.delete(`/api/admin/exam/${questionId}/`);
-}
-
-/** (어드민) 단어-문제 연결 목록 */
-export async function adminGetWordQuestionLinks(): Promise<WordQuestionLink[]> {
-  const { data } = await api.get<WordQuestionLink[]>("/api/admin/links/");
-  return data;
-}
-
-/** (어드민) 단어-문제 연결 생성 */
-export async function adminCreateWordQuestionLink(
-  linkData: WordQuestionLinkCreate
-): Promise<WordQuestionLinkCreate> {
-  const { data } = await api.post<WordQuestionLinkCreate>(
-    "/api/admin/links/",
-    linkData
-  );
-  return data;
-}
-
-/** (어드민) 단어-문제 연결 삭제 */
-export async function adminDeleteWordQuestionLink(
-  linkData: WordQuestionLinkCreate
-): Promise<void> {
-  await api.delete("/api/admin/links/", { data: linkData });
 }
 
 /**
@@ -528,6 +606,20 @@ export async function adminBulkUploadWords(file: File): Promise<any> {
     return data;
   } catch (e) {
     console.error("Failed to bulk upload words:", e);
+    throw new Error(toErrorMessage(e));
+  }
+}
+
+/**
+ * (사용자) 현재 로그인된 사용자의 프로필(닉네임/비밀번호)을 수정합니다.
+ * (PUT /api/users/me)
+ */
+export async function updateMe(profileData: UserUpdateProfile): Promise<User> {
+  try {
+    const { data } = await api.put<User>("/api/users/me", profileData);
+    return data;
+  } catch (e) {
+    console.error("Failed to update profile:", e);
     throw new Error(toErrorMessage(e));
   }
 }

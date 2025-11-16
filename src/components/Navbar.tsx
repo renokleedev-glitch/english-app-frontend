@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Settings } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useThemeStore } from "@/store/themeStore";
 import DarkModeToggle from "@/components/DarkModeToggle";
 import UserAvatar from "@/components/UserAvatar";
 import LogoutButton from "@/components/LogoutButton";
+import { Role } from "@/schemas";
+import Link from "next/link";
 
 export default function Navbar() {
   const { user } = useAuthStore();
@@ -38,6 +40,9 @@ export default function Navbar() {
 
   if (!mounted) return null;
 
+  const isPrivilegedUser =
+    user && (user.role === Role.ADMIN || user.role === Role.TEACHER);
+
   return (
     <motion.nav
       initial={{ y: 0 }}
@@ -56,22 +61,39 @@ export default function Navbar() {
       <div className="flex justify-between items-center px-5 py-3 max-w-6xl mx-auto">
         {/* 로고 */}
         <h1 className="font-bold text-lg text-violet-600 dark:text-violet-400 tracking-tight">
-          Hans English
+          <Link href="/">Hans English</Link>
         </h1>
 
         {/* 오른쪽 영역 */}
         <div className="flex items-center gap-3 md:gap-4">
-          {/* ✅ 다크모드 토글 항상 표시 */}
           <DarkModeToggle />
 
           {/* 데스크탑 메뉴 */}
           <div className="hidden md:flex items-center gap-4">
             {user ? (
               <>
-                <UserAvatar email={user.email} />
-                <span className="text-sm text-gray-700 dark:text-gray-100 font-medium">
-                  {user.email}
-                </span>
+                {/* 관리자 페이지 링크 (데스크탑) */}
+                {isPrivilegedUser && (
+                  <Link
+                    href="/admin/users"
+                    className="flex items-center text-sm font-medium text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300 transition-colors"
+                  >
+                    <Settings size={16} className="mr-1" />
+                    관리자
+                  </Link>
+                )}
+
+                {/* 🚨 [핵심 수정] UserAvatar를 /profile 링크로 감싸기 */}
+                <Link
+                  href="/profile"
+                  className="rounded-full focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2"
+                  aria-label="프로필 페이지로 이동"
+                >
+                  <UserAvatar email={user.email} />
+                </Link>
+
+                {/* 🚨 [핵심 수정] 닉네임 텍스트 링크 제거 */}
+
                 <LogoutButton />
               </>
             ) : (
@@ -98,16 +120,12 @@ export default function Navbar() {
             onClick={toggleMenu}
             aria-label="메뉴 열기"
           >
-            {isOpen ? (
-              <X className="w-5 h-5 text-gray-900 dark:text-gray-100" />
-            ) : (
-              <Menu className="w-5 h-5 text-gray-900 dark:text-gray-100" />
-            )}
+            {isOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
       </div>
 
-      {/* ✅ 모바일 드롭다운 */}
+      {/* ✅ 모바일 드롭다운 (모바일에서는 닉네임 텍스트 링크 유지) */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -124,29 +142,39 @@ export default function Navbar() {
               }
             `}
           >
-            <div className="flex flex-col gap-3 px-6 py-4">
+            <div className="flex flex-col gap-4 px-6 py-4">
               {user ? (
                 <>
-                  <div className="flex items-center gap-3">
+                  {/* 🚨 [핵심 수정] <div>를 <Link>로 변경하고, Avatar와 닉네임을 그 안에 배치합니다. */}
+                  <Link
+                    href="/profile"
+                    className="flex items-center gap-3 text-sm font-medium text-gray-700 dark:text-gray-200 hover:text-violet-600 dark:hover:text-violet-400 transition-colors"
+                    onClick={() => setIsOpen(false)} // 👈 메뉴 닫기
+                  >
                     <UserAvatar email={user.email} />
-                    <span className="text-sm font-medium">{user.email}</span>
-                  </div>
+                    <span>{user.nickname}</span>
+                  </Link>
+
+                  {/* 관리자 페이지 링크 (모바일) */}
+                  {isPrivilegedUser && (
+                    <Link
+                      href="/admin/users"
+                      className="flex items-center text-sm font-medium text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300 transition-colors"
+                      onClick={() => setIsOpen(false)}
+                    >
+                      <Settings size={16} className="mr-2" />
+                      관리자 페이지
+                    </Link>
+                  )}
+
                   <LogoutButton />
                 </>
               ) : (
                 <>
-                  <a
-                    href="/signup"
-                    className="text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300 transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
+                  <a href="/signup" /* ... */ onClick={() => setIsOpen(false)}>
                     회원가입
                   </a>
-                  <a
-                    href="/login"
-                    className="text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300 transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
+                  <a href="/login" /* ... */ onClick={() => setIsOpen(false)}>
                     로그인
                   </a>
                 </>

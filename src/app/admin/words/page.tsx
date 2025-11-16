@@ -1,7 +1,13 @@
 // src/app/admin/words/page.tsx
 "use client";
 
-import { useState, useEffect, FormEvent, ChangeEvent } from "react"; // 🚨 ChangeEvent 추가
+import {
+  useState,
+  useEffect,
+  FormEvent,
+  ChangeEvent,
+  useCallback,
+} from "react"; // 🚨 ChangeEvent 추가
 import { Word, WordCreate, WordUpdate } from "@/schemas";
 import {
   adminGetWords,
@@ -22,7 +28,13 @@ import {
   BookText,
   Download,
   Upload,
+  Search, // 🚨 [추가]
+  ChevronLeft, // 🚨 [추가]
+  ChevronRight, // 🚨 [추가]
 } from "lucide-react";
+
+// 🚨 [추가] 페이지 당 표시할 항목 수
+const PAGE_LIMIT = 10;
 
 // ------------------------------------------------------------------
 // 1. 단어 생성/수정 모달 컴포넌트
@@ -202,32 +214,38 @@ export default function AdminWordsPage() {
   const [words, setWords] = useState<Word[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // 🚨 [핵심] 모달 상태 관리
   const [editingWord, setEditingWord] = useState<Word | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-
-  // 🚨 [신규] 파일 업로드 로딩 상태
   const [isUploading, setIsUploading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [searchTerm, setSearchTerm] = useState("");
 
   // --- 데이터 로딩 ---
-  const fetchWords = async () => {
+  const fetchWords = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await adminGetWords();
-      setWords(data);
+      // 🚨 [핵심 수정] 페이지네이션 및 검색 API 호출
+      const data = await adminGetWords(currentPage, PAGE_LIMIT, searchTerm);
+      setWords(data.words);
+      setTotalPages(Math.ceil(data.total_count / PAGE_LIMIT));
     } catch (e: any) {
       setError(e.message);
       toast.error(`단어 목록 로드 실패: ${e.message}`);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [currentPage, searchTerm]); // 🚨 의존성 배열 수정
 
   useEffect(() => {
-    fetchWords();
-  }, []);
+    // 🚨 0.5초 디바운스(debounce) 적용
+    const timer = setTimeout(() => {
+      fetchWords();
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [fetchWords]); // 🚨 fetchWords를 의존성으로 변경
 
   // --- 이벤트 핸들러 ---
   const handleDelete = async (wordId: number, wordText: string) => {
@@ -308,6 +326,12 @@ export default function AdminWordsPage() {
     }
   };
 
+  // 🚨 [신규] 검색 핸들러
+  const handleSearchChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+    setCurrentPage(1); // 검색 시 1페이지로 리셋
+  };
+
   // --- UI 렌더링 ---
   if (isLoading) {
     return (
@@ -378,9 +402,35 @@ export default function AdminWordsPage() {
         </div>
       </div>
 
+      {/* 🚨 [핵심 추가] 검색창 */}
+      <div className="mb-4">
+        <label htmlFor="search" className="sr-only">
+          검색
+        </label>
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <Search className="w-5 h-5 text-gray-400" />
+          </div>
+          <input
+            type="text"
+            id="search"
+            value={searchTerm}
+            onChange={handleSearchChange}
+            className="w-full p-2 pl-10 border rounded-md dark:bg-gray-700 dark:border-gray-600"
+            placeholder="단어(text) 또는 뜻(meaning)으로 검색..."
+          />
+        </div>
+      </div>
+
       {/* 단어 목록 테이블 */}
       <div className="relative overflow-x-auto shadow-md rounded-lg">
-        <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+        {/* 🚨 [추가] 로딩 오버레이 */}
+        {isLoading && (
+          <div className="absolute inset-0 bg-white/50 dark:bg-gray-800/50 flex items-center justify-center z-10">
+            <Loader2 className="w-8 h-8 animate-spin text-violet-500" />
+          </div>
+        )}
+        <table className="w-full min-w-[640px] text-sm text-left text-gray-500 dark:text-gray-400">
           <thead className="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-400">
             <tr>
               <th scope="col" className="px-4 py-3">
@@ -428,6 +478,31 @@ export default function AdminWordsPage() {
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* 🚨 [핵심 추가] 페이지네이션 UI */}
+      <div className="flex justify-between items-center mt-4">
+        <span className="text-sm text-gray-700 dark:text-gray-400">
+          페이지 {currentPage} / {totalPages} (총 {words.length}개 항목)
+        </span>
+        <div className="inline-flex space-x-2">
+          <button
+            onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+            disabled={currentPage === 1 || isLoading}
+            className="px-3 py-1 text-sm font-medium bg-white dark:bg-gray-700 border rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <button
+            onClick={() =>
+              setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+            }
+            disabled={currentPage === totalPages || isLoading}
+            className="px-3 py-1 text-sm font-medium bg-white dark:bg-gray-700 border rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
       </div>
     </div>
   );

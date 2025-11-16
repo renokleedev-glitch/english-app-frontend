@@ -1,14 +1,23 @@
-// src/app/admin/roles/page.tsx (신규 파일)
+// src/app/admin/roles/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, ChangeEvent } from "react";
 import { User, Role } from "@/schemas";
-import { adminGetUsers, adminUpdateUserRole } from "@/lib/api"; // 👈 API 함수 임포트
+import { adminGetUsers, adminUpdateUserRole } from "@/lib/api";
 import { toast } from "sonner";
-import { Loader2, AlertCircle, UserCheck } from "lucide-react";
+import {
+  Loader2,
+  AlertCircle,
+  UserCheck,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+
+const PAGE_LIMIT = 10; // 페이지 당 표시할 항목 수
 
 /**
- * 개별 학생 행(Row) 컴포넌트
+ * 개별 사용자 행(Row) 컴포넌트
  */
 function RoleRow({ user }: { user: User }) {
   const [role, setRole] = useState<Role>(user.role);
@@ -62,9 +71,6 @@ function RoleRow({ user }: { user: User }) {
           <option value={Role.ADMIN}>ADMIN</option>
         </select>
       </td>
-      <td className="px-4 py-3">
-        {/* (기존 단어/문제 목표 칸은 이 페이지에서 제거됨) */}
-      </td>
     </tr>
   );
 }
@@ -77,30 +83,46 @@ export default function AdminRolesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // 페이지네이션 및 검색 상태
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  // --- 데이터 로딩 ---
   useEffect(() => {
     const fetchUsers = async () => {
       setIsLoading(true);
       setError(null);
       try {
-        const data = await adminGetUsers();
-        setUsers(data);
+        // 🚨 [핵심] API 호출 시 'role' 인자를 생략하여 모든 사용자 조회
+        const data = await adminGetUsers(
+          currentPage,
+          PAGE_LIMIT,
+          searchTerm
+          // role: undefined
+        );
+        setUsers(data.users);
+        setTotalPages(Math.ceil(data.total_count / PAGE_LIMIT));
       } catch (e: any) {
         setError(e.message);
-        toast.error(`학생 목록 로드 실패: ${e.message}`);
+        toast.error(`사용자 목록 로드 실패: ${e.message}`);
       } finally {
         setIsLoading(false);
       }
     };
-    fetchUsers();
-  }, []);
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-40">
-        <Loader2 className="w-8 h-8 animate-spin text-violet-500" />
-      </div>
-    );
-  }
+    // 0.5초 디바운스(debounce)
+    const timer = setTimeout(() => {
+      fetchUsers();
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [currentPage, searchTerm]); // 의존성 배열
+
+  const handleSearchChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+    setCurrentPage(1); // 검색 시 1페이지로 리셋
+  };
 
   if (error) {
     return (
@@ -122,7 +144,33 @@ export default function AdminRolesPage() {
         수 있고, &apos;ADMIN&apos;은 모든 권한을 가집니다.
       </p>
 
+      {/* 검색창 */}
+      <div className="mb-4">
+        <label htmlFor="search" className="sr-only">
+          검색
+        </label>
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <Search className="w-5 h-5 text-gray-400" />
+          </div>
+          <input
+            type="text"
+            id="search"
+            value={searchTerm}
+            onChange={handleSearchChange}
+            className="w-full p-2 pl-10 border rounded-md dark:bg-gray-700 dark:border-gray-600"
+            placeholder="이메일로 검색..."
+          />
+        </div>
+      </div>
+
+      {/* 테이블 및 로딩 오버레이 */}
       <div className="relative overflow-x-auto shadow-md rounded-lg">
+        {isLoading && (
+          <div className="absolute inset-0 bg-white/50 dark:bg-gray-800/50 flex items-center justify-center z-10">
+            <Loader2 className="w-8 h-8 animate-spin text-violet-500" />
+          </div>
+        )}
         <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
           <thead className="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-400">
             <tr>
@@ -132,7 +180,6 @@ export default function AdminRolesPage() {
               <th scope="col" className="px-4 py-3 w-40">
                 역할 (Role)
               </th>
-              <th scope="col" className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody>
@@ -141,6 +188,31 @@ export default function AdminRolesPage() {
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* 페이지네이션 UI */}
+      <div className="flex justify-between items-center mt-4">
+        <span className="text-sm text-gray-700 dark:text-gray-400">
+          페이지 {currentPage} / {totalPages}
+        </span>
+        <div className="inline-flex space-x-2">
+          <button
+            onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+            disabled={currentPage === 1 || isLoading}
+            className="px-3 py-1 text-sm font-medium bg-white dark:bg-gray-700 border rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <button
+            onClick={() =>
+              setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+            }
+            disabled={currentPage === totalPages || isLoading}
+            className="px-3 py-1 text-sm font-medium bg-white dark:bg-gray-700 border rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -1,55 +1,44 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import AuthForm from "@/components/AuthForm";
-import { signup } from "@/lib/auth";
-import { useAuthStore } from "@/store/authStore";
+import { signup, login } from "@/lib/auth"; // 👈 [수정] signup, login 임포트
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { useAuthStore } from "@/store/authStore";
+import { Role } from "@/schemas";
 
 export default function SignupPage() {
   const router = useRouter();
-  const user = useAuthStore((s) => s.user);
-  const setUser = useAuthStore((s) => s.setUser);
-  const fetchUser = useAuthStore((s) => s.fetchUser);
 
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  // ✅ 로그인되어 있으면 이전 페이지 또는 홈으로 리디렉트
-  useEffect(() => {
-    if (!mounted) return;
-    if (user) {
-      if (window.history.length > 1) router.back();
-      else router.replace("/");
+  // 🚨 [핵심 수정] handleSignUp이 nickname 인자를 받도록 변경
+  const handleSignUp = async (
+    email: string,
+    password: string,
+    nickname?: string
+  ) => {
+    // 1. 닉네임 유효성 검사
+    if (!nickname) {
+      throw new Error("닉네임을 입력해야 합니다.");
     }
-  }, [mounted, user, router]);
 
-  const handleSignup = async (email: string, password: string) => {
-    try {
-      await signup(email, password);
-      await fetchUser();
-      setUser(useAuthStore.getState().user);
-      alert("회원가입이 완료되었습니다!");
-      router.replace("/");
-    } catch (err: any) {
-      console.error(err);
-      alert("회원가입에 실패했습니다. 다시 시도해주세요.");
+    // 2. 회원가입 API 호출 (nickname 전달)
+    await signup(email, password, nickname);
+
+    // 3. 회원가입 성공 시, 즉시 로그인 처리
+    await login(email, password); // 👈 login 함수는 이메일(또는 admin)을 사용
+
+    // 4. 사용자 정보 가져오기 (Store 갱신)
+    const user = useAuthStore.getState().user;
+
+    toast.success("회원가입이 완료되었습니다. 환영합니다!");
+
+    // 5. 역할(Role)에 따라 리디렉션
+    if (user && (user.role === Role.ADMIN || user.role === Role.TEACHER)) {
+      router.push("/admin/users");
+    } else {
+      router.push("/dashboard");
     }
   };
 
-  // ✅ SSR-safe: 서버 렌더링 시 아무것도 표시하지 않음
-  if (!mounted) return null;
-
-  if (user) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center text-sm opacity-70">
-        이미 로그인되어 있어요. 이전 페이지로 이동합니다…
-      </div>
-    );
-  }
-
-  return <AuthForm type="signup" onSubmit={handleSignup} />;
+  return <AuthForm type="signup" onSubmit={handleSignUp} />;
 }
