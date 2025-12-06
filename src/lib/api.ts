@@ -41,7 +41,7 @@ if (!BASE_URL) {
   // 환경변수 없을 때 fallback
   BASE_URL =
     process.env.NODE_ENV === "production"
-      ? "https://english-app-backend-production-caa7.up.railway.app"
+      ? "https://hansmiddleback.com"
       : "http://localhost:8000";
 }
 
