@@ -514,7 +514,7 @@ export async function adminGetExamQuestions(
       search: search,
     };
 
-    const { data } = await api.get<PaginatedExamQuestions>("/api/admin/exam", {
+    const { data } = await api.get<PaginatedExamQuestions>("/api/admin/exam/", {
       params,
     });
     return data;
@@ -622,4 +622,31 @@ export async function updateMe(profileData: UserUpdateProfile): Promise<User> {
     console.error("Failed to update profile:", e);
     throw new Error(toErrorMessage(e));
   }
+}
+
+// ----------------------------------------------------------------------
+// 🚨 [수정] 내신 문제 템플릿 다운로드 & 벌크 업로드 함수
+// ----------------------------------------------------------------------
+
+// 1. 템플릿 다운로드 (GET)
+export async function adminGetExamQuestionTemplate() {
+  // 🚨 주소 수정: /admin/exam-questions -> /api/admin/exam
+  const response = await api.get("/api/admin/exam/template", {
+    responseType: "blob",
+  });
+  return response.data;
+}
+
+// 2. 벌크 업로드 (POST)
+export async function adminBulkUploadExamQuestions(file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  // 🚨 주소 수정: /admin/exam-questions -> /api/admin/exam
+  const response = await api.post("/api/admin/exam/bulk-upload", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+  return response.data;
 }

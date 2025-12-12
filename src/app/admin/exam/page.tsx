@@ -1,4 +1,4 @@
-// src/app/admin/exam/page.tsx (신규 파일)
+// src/app/admin/exam/page.tsx
 "use client";
 
 import {
@@ -18,6 +18,8 @@ import {
   adminCreateExamQuestion,
   adminUpdateExamQuestion,
   adminDeleteExamQuestion,
+  adminGetExamQuestionTemplate, // 🚨 [신규] API 함수 (lib/api.ts에 추가 필요)
+  adminBulkUploadExamQuestions, // 🚨 [신규] API 함수 (lib/api.ts에 추가 필요)
 } from "@/lib/api";
 import { toast } from "sonner";
 import {
@@ -28,12 +30,14 @@ import {
   Trash2,
   X,
   FileText,
-  Search, // 🚨 [추가]
-  ChevronLeft, // 🚨 [추가]
-  ChevronRight, // 🚨 [추가]
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Download, // 🚨 [신규] 아이콘
+  Upload, // 🚨 [신규] 아이콘
 } from "lucide-react";
 
-// 🚨 [추가] 페이지 당 표시할 항목 수
+// 페이지 당 표시할 항목 수
 const PAGE_LIMIT = 10;
 
 // ------------------------------------------------------------------
@@ -46,19 +50,19 @@ interface ExamModalProps {
 }
 
 function ExamModal({ question, onClose, onSave }: ExamModalProps) {
-  // 🚨 [핵심] JSON 필드(choices)는 문자열(JSON.stringify)로 관리
+  // JSON 필드(choices)는 문자열(JSON.stringify)로 관리
   const [formData, setFormData] = useState({
     grade_level: question?.grade_level || 1,
     grammar_point: question?.grammar_point || "",
     question_type: question?.question_type || "MC",
     question_text: question?.question_text || "",
-    // 🚨 choices는 JSON 객체이므로 문자열로 변환하여 textarea에서 편집
+    // choices는 JSON 객체이므로 문자열로 변환하여 textarea에서 편집
     choices: question?.choices
       ? JSON.stringify(question.choices, null, 2)
       : "[]",
     correct_answer: question?.correct_answer || "",
     explanation: question?.explanation || "",
-    // 🚨 scrambled_words는 배열이므로 join/split으로 변환
+    // scrambled_words는 배열이므로 join/split으로 변환
     scrambled_words: question?.scrambled_words
       ? question.scrambled_words.join(", ")
       : "",
@@ -73,7 +77,7 @@ function ExamModal({ question, onClose, onSave }: ExamModalProps) {
     );
 
     try {
-      // 🚨 [핵심] 폼 데이터를 백엔드 스키마에 맞게 변환
+      // 폼 데이터를 백엔드 스키마에 맞게 변환
       const payload: GrammarQuestionCreate | GrammarQuestionUpdate = {
         ...formData,
         grade_level: Number(formData.grade_level),
@@ -104,7 +108,7 @@ function ExamModal({ question, onClose, onSave }: ExamModalProps) {
       onClose();
     } catch (e: any) {
       toast.dismiss();
-      // 🚨 JSON 파싱 오류 등 상세 에러 표시
+      // JSON 파싱 오류 등 상세 에러 표시
       toast.error(`오류 발생: ${e.message}. (Choices JSON 형식을 확인하세요.)`);
     } finally {
       setIsSaving(false);
@@ -277,6 +281,10 @@ export default function AdminExamPage() {
     null
   );
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  // 🚨 [신규] 업로드 상태 관리
+  const [isUploading, setIsUploading] = useState(false);
+
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
@@ -286,7 +294,6 @@ export default function AdminExamPage() {
     setIsLoading(true);
     setError(null);
     try {
-      // 🚨 [핵심 수정] 페이지네이션 및 검색 API 호출
       const data = await adminGetExamQuestions(
         currentPage,
         PAGE_LIMIT,
@@ -300,16 +307,16 @@ export default function AdminExamPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [currentPage, searchTerm]); // 🚨 의존성 배열 수정
+  }, [currentPage, searchTerm]);
 
   useEffect(() => {
-    // 🚨 0.5초 디바운스(debounce) 적용
+    // 0.5초 디바운스(debounce) 적용
     const timer = setTimeout(() => {
       fetchQuestions();
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [fetchQuestions]); // 🚨 fetchQuestions를 의존성으로 변경
+  }, [fetchQuestions]);
 
   // --- 이벤트 핸들러 ---
   const handleDelete = async (questionId: number, questionText: string) => {
@@ -344,10 +351,60 @@ export default function AdminExamPage() {
     fetchQuestions(); // 저장 완료 시 목록 새로고침
   };
 
-  // 🚨 [신규] 검색 핸들러
   const handleSearchChange = (e: ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
     setCurrentPage(1); // 검색 시 1페이지로 리셋
+  };
+
+  // 🚨 [신규] 템플릿 다운로드 핸들러
+  const handleDownloadTemplate = async () => {
+    toast.loading("템플릿 다운로드 중...");
+    try {
+      const blob = await adminGetExamQuestionTemplate();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "exam_question_template.csv";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.dismiss();
+      toast.success("템플릿이 다운로드되었습니다.");
+    } catch (e: any) {
+      toast.dismiss();
+      toast.error(`다운로드 실패: ${e.message}`);
+    }
+  };
+
+  // 🚨 [신규] 파일 업로드 핸들러
+  const handleFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith(".csv")) {
+      toast.error("CSV 파일만 업로드할 수 있습니다.");
+      return;
+    }
+
+    setIsUploading(true);
+    toast.loading("CSV 파일을 분석하고 문제를 등록 중입니다...");
+
+    try {
+      const result = await adminBulkUploadExamQuestions(file);
+      toast.dismiss();
+      toast.success(
+        result.message || `${result.count || "여러"}개의 문제가 등록되었습니다!`
+      );
+      fetchQuestions(); // 목록 새로고침
+    } catch (e: any) {
+      toast.dismiss();
+      toast.error(`업로드 실패: ${e.message}`);
+    } finally {
+      setIsUploading(false);
+      // 동일한 파일을 다시 선택할 수 있도록 input 초기화
+      event.target.value = "";
+    }
   };
 
   // --- UI 렌더링 ---
@@ -376,15 +433,46 @@ export default function AdminExamPage() {
           <FileText className="mr-3" />
           내신 문제 관리
         </h1>
-        <button
-          onClick={() => setIsCreateModalOpen(true)}
-          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 flex items-center"
-        >
-          <Plus size={18} className="mr-1" /> 새 문제 추가
-        </button>
+
+        {/* 🚨 [수정] 버튼 그룹 (템플릿, 업로드, 추가) */}
+        <div className="flex space-x-2">
+          {/* 템플릿 다운로드 버튼 */}
+          <button
+            onClick={handleDownloadTemplate}
+            className="px-3 py-2 text-sm font-medium bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center"
+          >
+            <Download size={16} className="mr-1" /> 템플릿
+          </button>
+
+          {/* 벌크 업로드 버튼 (Label로 Input 감싸기) */}
+          <label
+            className={`
+                px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 flex items-center cursor-pointer
+                ${isUploading ? "opacity-50 cursor-not-allowed" : ""}
+                `}
+          >
+            <Upload size={16} className="mr-1" />
+            {isUploading ? "업로드 중..." : "벌크 업로드"}
+            <input
+              type="file"
+              accept=".csv"
+              className="hidden"
+              disabled={isUploading}
+              onChange={handleFileUpload}
+            />
+          </label>
+
+          {/* 새 문제 추가 버튼 */}
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 flex items-center"
+          >
+            <Plus size={18} className="mr-1" /> 새 문제 추가
+          </button>
+        </div>
       </div>
 
-      {/* 🚨 [핵심 추가] 검색창 */}
+      {/* 검색창 */}
       <div className="mb-4">
         <label htmlFor="search" className="sr-only">
           검색
@@ -404,9 +492,9 @@ export default function AdminExamPage() {
         </div>
       </div>
 
-      {/* 문제 목록 테이블 */}
+      {/* 문제 목록 테이블 (오버레이 로딩 방식 유지) */}
       <div className="relative overflow-x-auto shadow-md rounded-lg">
-        {/* 🚨 [추가] 로딩 오버레이 */}
+        {/* 🚨 로딩 오버레이 */}
         {isLoading && (
           <div className="absolute inset-0 bg-white/50 dark:bg-gray-800/50 flex items-center justify-center z-10">
             <Loader2 className="w-8 h-8 animate-spin text-violet-500" />
@@ -440,7 +528,20 @@ export default function AdminExamPage() {
               >
                 <td className="px-4 py-3 font-medium">{q.id}</td>
                 <td className="px-4 py-3">{q.grammar_point}</td>
-                <td className="px-4 py-3">{q.question_type}</td>
+                <td className="px-4 py-3">
+                  {/* 유형별 뱃지 스타일 적용 */}
+                  <span
+                    className={`px-2 py-1 rounded text-xs border ${
+                      q.question_type === "MC"
+                        ? "bg-blue-100 text-blue-800 border-blue-200"
+                        : q.question_type === "CORRECT"
+                        ? "bg-yellow-100 text-yellow-800 border-yellow-200"
+                        : "bg-purple-100 text-purple-800 border-purple-200"
+                    }`}
+                  >
+                    {q.question_type}
+                  </span>
+                </td>
                 <td className="px-4 py-3 text-gray-900 dark:text-white max-w-md truncate">
                   {q.question_text}
                 </td>
@@ -465,7 +566,8 @@ export default function AdminExamPage() {
           </tbody>
         </table>
       </div>
-      {/* 🚨 [핵심 추가] 페이지네이션 UI */}
+
+      {/* 페이지네이션 UI */}
       <div className="flex justify-between items-center mt-4">
         <span className="text-sm text-gray-700 dark:text-gray-400">
           페이지 {currentPage} / {totalPages} (총 {questions.length}개 항목)
