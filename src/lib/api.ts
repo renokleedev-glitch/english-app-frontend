@@ -630,8 +630,9 @@ export async function updateMe(profileData: UserUpdateProfile): Promise<User> {
 
 // 1. 템플릿 다운로드 (GET)
 export async function adminGetExamQuestionTemplate() {
-  // 🚨 주소 수정: /admin/exam-questions -> /api/admin/exam
-  const response = await api.get("/api/admin/exam/template", {
+  // ✅ 주소를 바꿉니다: /template -> /template-download
+  // (이러면 'DELETE /{question_id}' 라우터와 이름이 겹치지 않아 100% 안전합니다)
+  const response = await api.get("/api/admin/exam/template-download", {
     responseType: "blob",
   });
   return response.data;
