@@ -11,14 +11,15 @@ interface AuthFormProps {
   onSubmit: (
     email: string,
     password: string,
-    nickname?: string
+    nickname?: string,
+    phoneNumber?: string
   ) => Promise<void>;
 }
 
 export default function AuthForm({ type, onSubmit }: AuthFormProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  // 🆕 [핵심 추가 2] 닉네임 상태
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [nickname, setNickname] = useState("");
 
   const [loading, setLoading] = useState(false);
@@ -36,7 +37,7 @@ export default function AuthForm({ type, onSubmit }: AuthFormProps) {
           // 닉네임 유효성 검사
           throw new Error("닉네임을 입력해야 합니다.");
         }
-        await onSubmit(email, password, nickname);
+        await onSubmit(email, password, nickname, phoneNumber);
       } else {
         // 로그인은 기존과 동일
         await onSubmit(email, password);
@@ -78,6 +79,17 @@ export default function AuthForm({ type, onSubmit }: AuthFormProps) {
           />
         )}
 
+        {type === "signup" && (
+          <motion.input
+            type="tel" // 전화번호 타입
+            placeholder="전화번호 (선택 사항)"
+            className="p-3 rounded-md border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 transition"
+            value={phoneNumber}
+            onChange={(e) => setPhoneNumber(e.target.value)}
+            // required를 제거하여 선택 사항으로 둡니다.
+            whileFocus={{ scale: 1.02 }}
+          />
+        )}
         <motion.input
           type="text" // 👈 "email"이 아닌 "text" 유지 (admin 로그인을 위해)
           placeholder="아이디 이메일"
