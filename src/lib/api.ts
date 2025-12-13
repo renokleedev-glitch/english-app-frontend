@@ -82,7 +82,7 @@ export const api = axios.create({
 api.interceptors.request.use((config) => {
   const token = getToken();
   if (token) {
-    console.log("22222 Using API Base URL:", BASE_URL);
+    // console.log("22222 Using API Base URL:", BASE_URL);
     config.headers = config.headers ?? {};
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -93,13 +93,36 @@ api.interceptors.response.use(
   (res) => res,
   (err: AxiosError<any>) => {
     const status = err.response?.status;
+    const errorDetail = err.response?.data?.detail; // 백엔드 에러 메시지
+
+    // 🚨 401 에러 (토큰 만료/인증 실패) 발생 시
     if (status === 401) {
+      // 1. 기존 토큰 삭제
       clearToken();
-      console.warn("⚠️ Token invalid or expired — cleared from storage.");
+      console.warn("⚠️ 세션이 만료되어 로그아웃 처리합니다.");
+
+      // 2. (선택) "Could not validate..." 같은 서버 메시지 대신 친절한 메시지 보여주기
+      // 이미 페이지가 이동되므로 토스트가 안 보일 수도 있지만, 시도는 해봅니다.
+      // toast.error("로그인 정보가 만료되었습니다. 다시 로그인해주세요.");
+
+      // 3. 로그인 페이지로 강제 이동 (현재 주석 처리되어 있던 부분 해제!)
       if (typeof window !== "undefined") {
         // window.location.href = '/login';
+        // 👇 조금 더 세련된 방법: "어디 있다가 튕겼는지" 기억하게 하기
+        window.location.href = `/login?expired=true&next=${encodeURIComponent(
+          window.location.pathname
+        )}`;
       }
+
+      // 4. 에러를 reject 하지 않고, 여기서 흐름을 끊을 수도 있습니다.
+      // 하지만 보통은 reject 해서 호출한 쪽(컴포넌트)에서 로딩 상태를 끄게 합니다.
     }
+
+    // 💡 에러 메시지 변환 (Interceptor에서 미리 번역)
+    if (errorDetail === "Could not validate credentials") {
+      err.message = "로그인 세션이 만료되었습니다.";
+    }
+
     return Promise.reject(err);
   }
 );
