@@ -27,8 +27,9 @@ export interface User {
   id: number;
   email: string;
   daily_word_goal: number;
-  daily_exam_goal: number; // 👈 이 필드 추가
-  role: Role; // 👈 이 필드 추가
+  daily_exam_goal: number;
+  role: Role; //
+  phone_number: string | null; //
 }
 
 // --- 학습 진행도 관련 타입 ---
@@ -293,11 +294,10 @@ export interface UserUpdateProfile {
   password?: string; // 새 비밀번호 (선택적)
 }
 
-
 export interface UserUpdateProfile {
   nickname?: string;
   password?: string;
-  
+
   // 🚨 [핵심 추가] 전화번호 필드 추가
-  phone_number?: string | null; 
+  phone_number?: string | null;
 }
