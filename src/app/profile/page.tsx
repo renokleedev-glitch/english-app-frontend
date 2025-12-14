@@ -17,6 +17,7 @@ export default function ProfilePage() {
   const [nickname, setNickname] = useState("");
   // 🆕 [추가 1] 전화번호 상태 추가
   const [phoneNumber, setPhoneNumber] = useState("");
+  
 
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");

@@ -20,6 +20,7 @@ import {
   Loader2,
   UserCheck,
   Sun, // 🚨 [핵심 추가] 2. Sun/Moon 아이콘
+  User,
   Moon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -105,6 +106,12 @@ function SidebarContent() {
         <NavLink href="/dashboard">
           <LayoutDashboard className="w-4 h-4 mr-3" />
           메인 사이트
+        </NavLink>
+
+        {/* 🆕 [핵심 추가] 프로필 수정 버튼 */}
+        <NavLink href="/profile">
+          <User className="w-4 h-4 mr-3" />
+          프로필 수정
         </NavLink>
 
         {/* 🚨 [핵심 추가] 4. 다크 모드 토글 버튼 */}
