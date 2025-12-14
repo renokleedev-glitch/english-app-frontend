@@ -7,22 +7,27 @@ import { useRouter } from "next/navigation";
 import { Loader2, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { updateMe } from "@/lib/api"; // 🚨 [핵심] API 함수 임포트
-import { UserUpdateProfile } from "@/schemas"; // 🚨 [핵심] 타입 임포트
+import { updateMe } from "@/lib/api";
+import { UserUpdateProfile } from "@/schemas";
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { user, fetchUser } = useAuthStore(); // 👈 fetchUser 추가
+  const { user, fetchUser } = useAuthStore();
 
   const [nickname, setNickname] = useState("");
+  // 🆕 [추가 1] 전화번호 상태 추가
+  const [phoneNumber, setPhoneNumber] = useState("");
+
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // 1. 사용자 정보가 로드되면 닉네임 필드를 채웁니다.
+  // 1. 사용자 정보가 로드되면 닉네임과 전화번호 필드를 채웁니다.
   useEffect(() => {
     if (user) {
       setNickname(user.nickname);
+      // 🆕 [수정 1] 기존 전화번호로 상태 초기화 (nullable일 수 있으므로 || '' 처리)
+      setPhoneNumber(user.phone_number || "");
     }
   }, [user]);
 
@@ -52,6 +57,8 @@ export default function ProfilePage() {
     try {
       const payload: UserUpdateProfile = {
         nickname: nickname.trim(),
+        // 🆕 [핵심 추가 2] 전화번호를 payload에 추가 (빈 문자열도 서버로 보냄)
+        phone_number: phoneNumber.trim() || null,
       };
 
       // 비밀번호 필드가 채워진 경우에만 payload에 추가
@@ -61,7 +68,7 @@ export default function ProfilePage() {
 
       await updateMe(payload);
 
-      // 🚨 [핵심] Store의 사용자 정보를 새로고침 (Navbar 닉네임 즉시 변경)
+      // 🚨 [핵심] Store의 사용자 정보를 새로고침
       await fetchUser();
 
       toast.dismiss();
@@ -117,6 +124,26 @@ export default function ProfilePage() {
                 onChange={(e) => setNickname(e.target.value)}
                 required
                 className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600"
+              />
+            </div>
+          </div>
+
+          {/* 🆕 [추가 3] 전화번호 입력 필드 */}
+          <div>
+            <label
+              htmlFor="phoneNumber"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              전화번호 (Phone Number)
+            </label>
+            <div className="mt-1">
+              <input
+                id="phoneNumber"
+                type="tel"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600"
+                placeholder="선택 사항"
               />
             </div>
           </div>
