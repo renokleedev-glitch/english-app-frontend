@@ -93,34 +93,37 @@ api.interceptors.response.use(
   (res) => res,
   (err: AxiosError<any>) => {
     const status = err.response?.status;
-    const errorDetail = err.response?.data?.detail; // 백엔드 에러 메시지
+    const errorDetail = err.response?.data?.detail;
+
+    // 🆕 [핵심 수정] 로그인 API(/api/login/token) 호출에서는 401 에러가 나도 리디렉션을 막습니다.
+    const isLoginAttempt = err.config?.url?.includes("/api/login/token");
 
     // 🚨 401 에러 (토큰 만료/인증 실패) 발생 시
     if (status === 401) {
-      // 1. 기존 토큰 삭제
-      clearToken();
-      console.warn("⚠️ 세션이 만료되어 로그아웃 처리합니다.");
+      // 🚨 [핵심 변경] 로그인 시도 중이라면 (비번 틀림) 아무것도 하지 않고 에러를 던집니다.
+      if (isLoginAttempt) {
+        // 토큰이 없는 상태이므로, 세션 만료 토스트 대신 원래 에러 메시지를 사용하도록 합니다.
+      } else {
+        // 토큰이 있는 상태에서 만료된 경우 (인증이 필요한 다른 API 호출)
 
-      // 2. (선택) "Could not validate..." 같은 서버 메시지 대신 친절한 메시지 보여주기
-      // 이미 페이지가 이동되므로 토스트가 안 보일 수도 있지만, 시도는 해봅니다.
-      // toast.error("로그인 정보가 만료되었습니다. 다시 로그인해주세요.");
+        // 1. 기존 토큰 삭제
+        clearToken();
+        console.warn("⚠️ 세션이 만료되어 로그아웃 처리합니다.");
 
-      // 3. 로그인 페이지로 강제 이동 (현재 주석 처리되어 있던 부분 해제!)
-      if (typeof window !== "undefined") {
-        // window.location.href = '/login';
-        // 👇 조금 더 세련된 방법: "어디 있다가 튕겼는지" 기억하게 하기
-        window.location.href = `/login?expired=true&next=${encodeURIComponent(
-          window.location.pathname
-        )}`;
+        // 2. 로그인 페이지로 강제 이동 (세션 만료 케이스)
+        if (typeof window !== "undefined") {
+          window.location.href = `/login?expired=true&next=${encodeURIComponent(
+            window.location.pathname
+          )}`;
+        }
       }
-
-      // 4. 에러를 reject 하지 않고, 여기서 흐름을 끊을 수도 있습니다.
-      // 하지만 보통은 reject 해서 호출한 쪽(컴포넌트)에서 로딩 상태를 끄게 합니다.
     }
 
     // 💡 에러 메시지 변환 (Interceptor에서 미리 번역)
     if (errorDetail === "Could not validate credentials") {
-      err.message = "로그인 세션이 만료되었습니다.";
+      // 🆕 [수정] 이 메시지는 로그인/세션 만료 두 상황 모두 가능하므로,
+      // 여기서 고정된 메시지를 덮어씌우는 대신, login/page.tsx에서 처리하도록 둡니다.
+      // err.message = "로그인 세션이 만료되었습니다."; // <- 주석 처리하거나 제거
     }
 
     return Promise.reject(err);
@@ -165,6 +168,10 @@ export async function loginUser(
     console.log(data);
     return data;
   } catch (e) {
+    // 🆕 [핵심 변경] 401 에러일 경우 메시지를 확실하게 설정
+    if ((e as AxiosError).response?.status === 401) {
+      throw new Error("이메일 또는 비밀번호가 일치하지 않습니다."); // 👈 확실한 메시지 전달
+    }
     throw new Error(toErrorMessage(e));
   }
 }
