@@ -292,3 +292,12 @@ export interface UserUpdateProfile {
   nickname?: string; // 닉네임 (선택적)
   password?: string; // 새 비밀번호 (선택적)
 }
+
+
+export interface UserUpdateProfile {
+  nickname?: string;
+  password?: string;
+  
+  // 🚨 [핵심 추가] 전화번호 필드 추가
+  phone_number?: string | null; 
+}
