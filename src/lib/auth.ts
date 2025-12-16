@@ -51,7 +51,7 @@ export async function signup(
   phoneNumber?: string
 ) {
   try {
-    const res = await api.post("/api/users/", {
+    const res = await api.post("/api/users", {
       email,
       password,
       nickname,
