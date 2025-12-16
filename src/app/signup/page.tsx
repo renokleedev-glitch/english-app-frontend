@@ -1,7 +1,7 @@
 "use client";
 
 import AuthForm from "@/components/AuthForm";
-import { signup, login } from "@/lib/auth";
+import { signup } from "@/lib/auth"; // 👈 [변경] login은 signup 내부에서 자동 처리되므로 제거
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store/authStore";
@@ -10,35 +10,41 @@ import { Role } from "@/schemas";
 export default function SignupPage() {
   const router = useRouter();
 
-  // 🚨 [수정 1] 인자에 phoneNumber 추가
   const handleSignUp = async (
     email: string,
     password: string,
     nickname?: string,
-    phoneNumber?: string // 👈 전화번호 추가 (선택 사항일 수 있으므로 ?)
+    phoneNumber?: string
   ) => {
-    // 1. 닉네임 유효성 검사
+    // 1. 닉네임 유효성 검사 (간단한 프론트 검증)
     if (!nickname) {
-      throw new Error("닉네임을 입력해야 합니다.");
+      toast.error("닉네임을 입력해야 합니다.");
+      return;
     }
 
-    // 2. 회원가입 API 호출 (phoneNumber 전달)
-    // 🚨 [수정 2] signup 함수에도 phoneNumber를 넘겨줘야 함
-    await signup(email, password, nickname, phoneNumber);
+    // 2. 회원가입 API 호출
+    // 🚨 [변경] try-catch 제거. result.success로 판단
+    // signup 함수 내부에서 '회원가입 -> 로그인 -> 유저정보 fetch'까지 모두 완료됨
+    const result = await signup(email, password, nickname, phoneNumber);
 
-    // 3. 회원가입 성공 시, 즉시 로그인 처리
-    await login(email, password);
+    // 3. 결과 분기 처리
+    if (result && result.success) {
+      // ✅ 성공 처리
+      toast.success("회원가입이 완료되었습니다. 환영합니다!");
 
-    // 4. 사용자 정보 가져오기 (Store 갱신)
-    const user = useAuthStore.getState().user;
+      // 스토어에 이미 유저 정보가 들어있으므로 바로 꺼내옵니다.
+      const user = useAuthStore.getState().user;
 
-    toast.success("회원가입이 완료되었습니다. 환영합니다!");
-
-    // 5. 역할(Role)에 따라 리디렉션
-    if (user && (user.role === Role.ADMIN || user.role === Role.TEACHER)) {
-      router.push("/admin/users");
+      // 4. 역할(Role)에 따라 리디렉션
+      if (user && (user.role === Role.ADMIN || user.role === Role.TEACHER)) {
+        router.push("/admin/users");
+      } else {
+        router.push("/dashboard");
+      }
     } else {
-      router.push("/dashboard");
+      // ❌ 실패 처리
+      // auth.ts에서 "이미 존재하는 아이디입니다" 등의 메시지를 result.error에 담아줍니다.
+      toast.error(result?.error || "회원가입에 실패했습니다.");
     }
   };
 
