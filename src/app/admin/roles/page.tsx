@@ -137,7 +137,7 @@ export default function AdminRolesPage() {
     <div>
       <h1 className="text-3xl font-bold mb-6 flex items-center">
         <UserCheck className="mr-3" />
-        (어드민) 역할 관리
+        권한 관리
       </h1>
       <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
         사용자의 역할을 변경합니다. &apos;TEACHER&apos;는 학생 목표량을 수정할

@@ -149,8 +149,7 @@ export default function AdminUsersPage() {
         학생 관리
       </h1>
       <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-        학생의 일일 학습 목표량을 수정합니다. (역할 관리는 &apos;(어드민) 역할
-        관리&apos; 탭에서 수행합니다.)
+        학생의 일일 학습 목표량을 수정합니다.
       </p>
 
       {/* 검색창 */}
